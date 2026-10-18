@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { START_RADIUS, radiusForMass, canSwallow, levelForRadius, clampPosition } from './rules.js';
-import { createMap } from './maps/index.js';
+import { createMap, MAPS } from './maps/index.js';
 
 test('growth starts small and reaches the largest buildings through available food', () => {
   assert.equal(radiusForMass(0), START_RADIUS);
@@ -25,25 +25,28 @@ test('hole stays inside town at every size', () => {
   assert.equal(clampPosition(3, 6, 40), 3);
 });
 
-test('the actual town has a complete growth path', () => {
-  for (const seed of [1, 24681, 98765]) {
-    const remaining = createMap('town', seed).items.sort((a, b) => a.radius - b.radius || Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
+test('every map has a complete growth path', () => {
+  for (const mapId of Object.keys(MAPS)) for (const seed of [1, 24681, 98765]) {
+    const map = createMap(mapId, seed);
+    const remaining = map.items.sort((a, b) => a.radius - b.radius || Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
     let mass = 0;
     while (remaining.length) {
       const radius = radiusForMass(mass);
-      const index = remaining.findIndex(item => canSwallow({ x: clampPosition(item.x, radius, 40), z: clampPosition(item.z, radius, 40), radius }, item));
-      assert.notEqual(index, -1, `seed ${seed}: ${remaining.length} unreachable items at radius ${radius}`);
+      const index = remaining.findIndex(item => canSwallow({ x: clampPosition(item.x, radius, map.bounds), z: clampPosition(item.z, radius, map.bounds), radius }, item));
+      assert.notEqual(index, -1, `${mapId}, seed ${seed}: ${remaining.length} unreachable items at radius ${radius}`);
       mass += remaining.splice(index, 1)[0].mass;
     }
   }
 });
 
-test('any town item can be left until last and still reached by the largest hole', () => {
-  const town = createMap('town', 24681).items;
-  const totalMass = town.reduce((mass, item) => mass + item.mass, 0);
-  for (const item of town) {
+test('any item on any map can be left until last and reached by the largest hole', () => {
+  for (const mapId of Object.keys(MAPS)) {
+  const map = createMap(mapId, 24681);
+  const totalMass = map.items.reduce((mass, item) => mass + item.mass, 0);
+  for (const item of map.items) {
     const radius = radiusForMass(totalMass - item.mass);
-    const hole = { x: clampPosition(item.x, radius, 40), z: clampPosition(item.z, radius, 40), radius };
-    assert.ok(canSwallow(hole, item), `${item.type} at (${item.x}, ${item.z}) remains reachable last`);
+    const hole = { x: clampPosition(item.x, radius, map.bounds), z: clampPosition(item.z, radius, map.bounds), radius };
+    assert.ok(canSwallow(hole, item), `${mapId}: ${item.type} at (${item.x}, ${item.z}) remains reachable last`);
+  }
   }
 });

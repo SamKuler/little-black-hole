@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createMap } from '../maps/index.js';
+import { createMap, MAPS } from '../maps/index.js';
 import { MapScene } from './map-scene.js';
 
-test('all town objects render through batches and release their resources on map changes', () => {
-  const scene = new THREE.Scene(), map = createMap('town', 42), view = new MapScene(scene, map);
-  assert.equal(view.parts.size, 212); assert.ok(view.root.children.length < 130);
+for (const mapId of Object.keys(MAPS)) test(`${mapId} renders through bounded batches and releases resources on map changes`, () => {
+  const scene = new THREE.Scene(), map = createMap(mapId, 42), view = new MapScene(scene, map);
+  assert.equal(view.parts.size, map.items.length);
+  assert.ok(view.root.children.length < 200, `${mapId}: ${view.root.children.length} draw batches`);
   for (const item of map.items) assert.ok(view.parts.get(item.id).length > 0);
   const item = map.items[0]; view.pose(item, { x: 2, y: -1, z: 3, rx: .2, rz: .1 }); view.flush();
   const part = view.parts.get(item.id)[0], matrix = new THREE.Matrix4(); part.batch.getMatrixAt(part.index, matrix);

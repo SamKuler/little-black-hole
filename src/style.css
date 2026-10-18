@@ -10,3 +10,19 @@
 @media(max-width:700px){.intro{top:18%;left:28px}.mode-picker button{padding:9px 10px;font-size:10px}.intro .intro-note{font-size:10px}.intro.network{top:14%}.room-panel{top:19%;left:22px;width:calc(100% - 44px);max-width:350px;padding:21px}.room-panel h2{font-size:18px}.clock{top:58px;padding:6px 16px;border-radius:12px;min-width:90px}.clock strong{font-size:23px}.clock span{font-size:8px}.leaderboard{top:138px;right:15px;width:155px;padding:11px 13px}.leaderboard .player-list li{font-size:10px;padding:5px 0}.leaderboard .player-stat{font-size:9px}.bottom-actions{gap:13px}.bottom-actions .text-button{font-size:10px;padding:3px 0}.room-panel .player-list li{padding:8px 0}.playing #toast{top:121px}.mode{display:none}#network-form{max-width:290px}#network-status{font-size:10px}}
 @media(max-height:700px) and (min-width:701px){.intro{top:19%}.intro.network{top:15%}.room-panel{top:19%}}
 .paused-banner{position:absolute;left:50%;top:120px;transform:translateX(-50%);padding:13px 20px;border-radius:13px;background:#fffffff0;color:#5d43b5;font-size:12px;box-shadow:0 8px 24px #34444d12;white-space:nowrap}.map-choice{display:block;font-size:11px;color:var(--muted);margin:0 0 14px}.map-choice select{margin-left:10px;font:inherit;padding:8px;border:1px solid #c9d0d3;border-radius:8px;color:var(--ink);background:white}.map-choice select:focus-visible{outline:3px solid var(--purple);outline-offset:2px}@media(max-width:700px){.paused-banner{top:140px;font-size:10px;max-width:95vw;white-space:normal;text-align:center}}
+
+.map-card{padding:14px 16px;margin-bottom:17px;border:1px solid #ffffffb3;border-radius:15px;background:#fffffff0;max-width:330px;box-shadow:0 6px 22px #34444d0b}
+.map-card .map-choice{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;font-weight:700;color:var(--ink)}
+.map-card select{min-width:0;max-width:190px;margin:0;padding:8px 10px;flex:1}
+.map-card p{margin:9px 0 0;font-size:11px;line-height:1.7;color:var(--muted)}
+.map-card .map-details{font-size:10px;font-variant-numeric:tabular-nums;color:#7055a7}
+.map-card .map-host-note{font-size:10px;border-top:1px solid #e6e3ec;padding-top:8px}
+.room-map-card{padding:12px;margin:8px 0 13px;background:#f6f4fb;border-color:#e9e3f3;box-shadow:none}
+.room-map-card select:disabled{opacity:1;color:var(--ink);background:#eeebf4;cursor:default}
+.intro,.room-panel{max-height:calc(100dvh - 170px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.intro{padding:5px 6px 10px;margin-left:-6px}
+.intro.network{top:14%}.intro.network .mode-picker{margin-top:0}
+.room-panel{top:16%}
+#app[data-map=cyberpunk] .brand,#app[data-map=cyberpunk] .mode,#app[data-map=cyberpunk] .controls-hint,#app[data-map=cyberpunk] .controls-hint small,#app[data-map=cyberpunk] .bottom-actions .text-button,#app[data-map=cyberpunk] .intro-note,#app[data-map=cyberpunk] #network-status,#app[data-map=cyberpunk] #network-form>label{color:#eef1ff}
+@media(max-width:700px){.map-card{padding:11px 13px;margin-bottom:12px}.map-card p{font-size:10px}.map-card .map-details,.map-card .map-host-note{font-size:9px}.map-card select{max-width:170px}.room-panel{top:100px;max-height:calc(100dvh - 118px)}.intro{top:110px;max-height:calc(100dvh - 125px)}.intro.network{top:100px;max-height:calc(100dvh - 115px)}}
+@media(max-height:560px) and (min-width:701px){.intro,.intro.network,.room-panel{top:95px;max-height:calc(100dvh - 110px)}}

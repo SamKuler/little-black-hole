@@ -9,7 +9,7 @@
   </head>
   <body>
     <main id="app">
-      <div id="world" aria-label="3D 小镇游戏场景"></div>
+      <div id="world" aria-label="3D 黑洞游戏场景"></div>
       <header class="topbar">
         <a class="brand" href="./" aria-label="小小黑洞首页"><span class="brand-hole"></span><span>小小黑洞</span></a>
         <div id="clock" class="clock" hidden><span>剩余时间</span><strong>02:00</strong></div>
@@ -17,7 +17,11 @@
       </header>
       <section id="intro" class="intro" aria-label="游戏模式与房间">
         <div class="mode-picker" role="group" aria-label="选择游戏模式"><button data-mode="free" aria-pressed="true">自由漫游</button><button data-mode="timed" aria-pressed="false">限时挑战</button><button data-mode="online" aria-pressed="false">好友联机</button></div>
-        <label id="map-choice" class="map-choice" hidden>选择地图<select id="map-select"></select></label>
+        <div id="map-choice" class="map-card" hidden>
+          <label class="map-choice" for="map-select">选择地图<select id="map-select" aria-describedby="map-description map-details"></select></label>
+          <p id="map-description"></p><p id="map-details" class="map-details" aria-live="polite"></p>
+          <p id="map-host-note" class="map-host-note" hidden>创建房间时使用这张地图；加入房间后以房主选择为准。</p>
+        </div>
         <button id="start" class="primary">开始吞噬 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
         <span id="mode-note" class="intro-note">无时间限制，清空地图后结算。</span>
         <section id="network-form" hidden aria-label="创建或加入好友房间">
@@ -32,6 +36,11 @@
         <div class="room-panel-heading"><h2>好友房间</h2><button id="leave-lobby" class="text-button">离开</button></div>
         <p id="room-description"></p><div class="invite-row"><strong id="invite-code"></strong><button id="copy-invite" class="secondary">复制邀请链接</button></div>
         <input id="invite-link" readonly aria-label="邀请链接" hidden />
+        <div class="map-card room-map-card">
+          <label class="map-choice" for="room-map-select">本轮地图<select id="room-map-select" aria-describedby="room-map-description room-map-details room-map-note"></select></label>
+          <p id="room-map-description"></p><p id="room-map-details" class="map-details" aria-live="polite"></p>
+          <p id="room-map-note" class="map-host-note"></p>
+        </div>
         <ol id="lobby-players" class="player-list"></ol>
         <button id="room-start" class="primary" disabled>等待朋友加入</button><p id="lobby-note" class="room-note">房主开启比赛，所有人同步出发。</p>
       </section>
@@ -44,9 +53,9 @@
         <section id="progress" class="progress-panel" aria-label="吞噬进度">
           <div class="progress-heading"><span class="level-badge" id="level-number">1</span><div><strong id="level-name">小小胃口</strong><span id="edible-label">可以吞噬：石子、路锥、灌木</span></div><span id="size">2.4<span> m</span></span></div>
           <div class="progress-track"><div id="progress-fill"></div></div>
-          <div class="progress-meta"><span>小镇清空进度</span><span><b id="eaten">0</b> / <span id="total">0</span></span></div>
+          <div class="progress-meta"><span>地图清空进度</span><span><b id="eaten">0</b> / <span id="total">0</span></span></div>
         </section>
-        <div class="bottom-actions"><button id="home" class="text-button" hidden>返回首页</button><button id="restart" class="text-button" title="重新生成小镇"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span>重新开始</span></button></div>
+        <div class="bottom-actions"><button id="home" class="text-button" hidden>返回首页</button><button id="restart" class="text-button" title="重新生成地图"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span>重新开始</span></button></div>
       </footer>
       <div id="joystick" aria-hidden="true"><span></span></div>
       <dialog id="pause-dialog"><form method="dialog"><span class="dialog-orbit"></span><h2>游戏已暂停</h2><p>移动和计时已暂停。</p><button class="primary">继续吞噬</button></form></dialog>

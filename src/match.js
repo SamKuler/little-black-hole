@@ -105,7 +105,10 @@ export class Match {
       round: this.round, mode: this.mode, mapId: this.mapId, seed: this.seed, phase: this.phase, elapsed: this.elapsed,
       eaten: this.eaten, total: this.items.length,
       players: this.players.map(({ input, inputAt, ...player }) => ({ ...player, vx: this.phase === 'playing' ? input.x * (6.5 + player.radius * .4) : 0, vz: this.phase === 'playing' ? input.z * (6.5 + player.radius * .4) : 0 })),
-      claims: this.claims.map(claim => ({ ...claim })),
+      // Completed objects only need an ID to disappear on clients. Keep their
+      // animation/owner history authoritative here, rather than retransmitting
+      // it every tick across hundreds of objects on the larger maps.
+      claims: this.claims.map(claim => claim.done ? { id: claim.id, done: true } : { ...claim }),
     };
   }
 }

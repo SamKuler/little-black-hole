@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Match, ROUND_SECONDS, standings } from './match.js';
+import { MAPS } from './maps/index.js';
 
 function started(mode = 'free') {
   const match = new Match(mode, 42); match.addPlayer('host', '房主'); match.start(); return match;
@@ -50,6 +51,22 @@ test('disconnect preserves awarded food, stops movement and standings rank by ma
 test('snapshots cannot mutate authoritative scores or claim state', () => {
   const match = started(); const snapshot = match.snapshot(); snapshot.players[0].mass = 99999;
   assert.equal(match.players[0].mass, 0);
+});
+
+test('large-map late-round snapshots compact completed food and retain active animations', () => {
+  for (const mapId of Object.keys(MAPS)) {
+    const match = new Match('coop', 42, mapId); match.addPlayer('host', '房主'); match.start();
+    match.claims = match.items.map(item => ({ id: item.id, owner: 'host', at: 12, duration: 1, x: item.x, z: item.z, done: true }));
+    match.claims.at(-1).done = false;
+    const snapshot = match.snapshot();
+    assert.equal(snapshot.claims.length, match.items.length);
+    assert.deepEqual(snapshot.claims[0], { id: 0, done: true });
+    assert.deepEqual(snapshot.claims.at(-1), match.claims.at(-1));
+    assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) < 24000, `${mapId} late-round network payload stays bounded`);
+    snapshot.claims[0].id = -1; snapshot.claims.at(-1).at = 999;
+    assert.equal(match.claims[0].id, 0); assert.equal(match.claims.at(-1).at, 12);
+    assert.equal(match.claims[0].owner, 'host');
+  }
 });
 
 test('cooperation shares growth and keeps the team size when a contributor leaves', () => {
