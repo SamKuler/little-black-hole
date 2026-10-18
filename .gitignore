@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+.impeccable/
+docs/superpowers/
+.vercel/
+.env
+.env.*
+output/

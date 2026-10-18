@@ -1,0 +1,9 @@
+node_modules
+.git
+.vercel
+.impeccable
+docs/superpowers
+output
+.env
+.env.*
+*.test.js
