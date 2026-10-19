@@ -28,27 +28,31 @@ test('home and lobby keep headings outside their scrollable content', () => {
     assert.ok(content, `${id} has a shared scrollable content area`);
     assert.ok(elements.some(element => element.parent === menu && element.tag === 'h1'), `${id} retains its heading`);
     assert.ok(elements.some(element => element.parent === menu && hasClass(element, 'intro-dot')), `${id} retains its heading accent`);
-    for (const child of id === 'intro' ? ['map-select', 'start', 'network-form'] : ['room-map-select', 'lobby-players', 'room-start']) {
+    for (const child of id === 'intro' ? ['map-picker', 'start', 'network-form'] : ['room-map-picker', 'lobby-players', 'room-start']) {
       assert.ok(within(byId(child), content), `${child} stays in the scrollable content area`);
     }
   }
   assert.ok(elements.some(element => element.parent === byId('intro') && hasClass(element, 'mode-picker')));
 });
 
-test('both map selectors retain labels and accessible descriptions', () => {
-  for (const id of ['map-select', 'room-map-select']) {
-    const select = byId(id);
-    assert.equal(select?.tag, 'select');
-    assert.ok(elements.some(element => element.tag === 'label' && element.attrs.for === id));
-    for (const description of select.attrs['aria-describedby'].split(' ')) assert.ok(byId(description), `${id} refers to ${description}`);
-    assert.ok(hasClass(select.parent.parent, 'map-selection'));
+test('both compact map groups retain accessible names without descriptive clutter', () => {
+  for (const id of ['map-picker', 'room-map-picker']) {
+    const picker = byId(id);
+    assert.equal(picker?.attrs.role, 'radiogroup');
+    assert.ok(byId(picker.attrs['aria-labelledby']), `${id} has a visible group label`);
+    assert.ok(hasClass(picker.parent, 'map-selection'));
+  }
+  assert.ok(byId('room-map-name'), 'guests have a read-only map name');
+  assert.ok(!elements.some(element => element.tag === 'select'), 'no native dropdowns remain');
+  for (const id of ['map-description', 'map-details', 'map-host-note', 'room-map-description', 'room-map-details', 'room-map-note', 'mode-note', 'lobby-note']) {
+    assert.equal(byId(id), undefined, `${id} is removed rather than hidden`);
   }
 });
 
 test('menu integration does not duplicate existing controls or IDs', () => {
   const ids = elements.filter(element => element.attrs.id).map(element => element.attrs.id);
   assert.equal(new Set(ids).size, ids.length);
-  for (const id of ['nickname', 'create-room', 'join-room', 'room-code', 'room-start', 'copy-invite', 'leave-lobby', 'map-host-note']) {
+  for (const id of ['nickname', 'create-room', 'join-room', 'room-code', 'room-start', 'copy-invite', 'leave-lobby']) {
     assert.ok(byId(id), `${id} is retained`);
   }
   assert.ok(within(byId('nickname'), byId('network-form')));

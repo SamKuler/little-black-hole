@@ -91,7 +91,6 @@
 .room-panel-heading { min-height: 52px; margin-bottom: 19px; }
 .room-panel-heading .text-button { min-height: 44px; padding: 0 8px; font-size: 12px; }
 .room-panel .menu-content > p { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.7; }
-#lobby-note { margin: 12px 0 0; }
 @media (min-width: 1600px) {
   .intro,
   .room-panel { left: 12%; }
@@ -109,49 +108,19 @@
   .room-panel { --menu-top: 19vh; }
 }
 
-/* Map selection is a regular field in the shared menu, not a separate panel. */
-.map-selection {
-  width: min(295px, 100%);
-  margin: 0 0 20px;
-}
-.map-choice {
-  display: block;
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-.map-choice select {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  margin: 7px 0 0;
-  padding: 12px 13px;
-  border: 1px solid #c9d0d3;
-  border-radius: 11px;
-  background: #fffffff0;
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-}
-.map-choice select:focus-visible {
-  outline: 3px solid var(--purple);
-  outline-offset: 2px;
-}
-.map-choice select:disabled {
-  opacity: 1;
-  background: #f0edf6;
-  color: var(--muted);
-  cursor: default;
-}
-.map-selection p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-.map-selection .map-details { font-variant-numeric: tabular-nums; }
-.room-map-selection { margin-top: 4px; }
+/* A quiet inline choice below the mode control; the start button stays primary. */
+.map-selection { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; }
+.map-label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.map-picker { display: flex; gap: 4px; }
+.map-chip { position: relative; display: flex; align-items: center; min-height: 44px; cursor: pointer; }
+.map-chip input { position: absolute; width: 1px; height: 1px; min-height: 0; margin: 0; padding: 0; opacity: 0; }
+.map-chip span { display: block; padding: 6px 11px; border: 1px solid transparent; border-radius: 9px; color: var(--muted); font-size: 12px; line-height: 18px; transition: background .2s, color .2s; }
+.map-chip:hover span { background: #ffffff90; }
+.map-chip input:checked + span { border-color: #cfc2ed; background: #eee8fa; color: #5d43b5; font-weight: 600; }
+.map-chip input:focus-visible + span { outline: 2px solid var(--purple); outline-offset: 2px; }
+.map-name { color: #5d43b5; font-size: 12px; font-weight: 600; }
+.room-map-selection { min-height: 44px; margin: 4px 0 12px; }
+#network-status:empty { display: none; }
 #app[data-map=cyberpunk] .brand,
 #app[data-map=cyberpunk] .mode,
 #app[data-map=cyberpunk] .controls-hint,
