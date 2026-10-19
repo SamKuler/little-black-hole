@@ -67,11 +67,11 @@ async function createRoom(t, { mapId = DEFAULT_MAP, mode = 'race', guests = 1 } 
   return { host, guest: clients[0], clients, joinGuest };
 }
 
-test('room codes remain shareable and map-compatible peers use the v3 namespace', async t => {
+test('room codes remain shareable and map-compatible peers use the v4 physics namespace', async t => {
   for (let i = 0; i < 20; i++) assert.equal(validRoomCode(newRoomCode()), true);
   for (const code of ['', '123', 'abcdefgh', 'ABCDEFG0', 'ABCDEFG1', 'ABCDEFG!']) assert.equal(validRoomCode(code), false);
   const { host, guest } = await createRoom(t);
-  assert.equal(host.selfId, `little-black-hole-v3-${host.code}`);
+  assert.equal(host.selfId, `little-black-hole-v4-${host.code}`);
   assert.equal(guest.hostConnection.peer, host.selfId);
 });
 
@@ -198,4 +198,21 @@ test('multiple map changes in one clock tick still change the seed and round eac
     assert.equal(host.selectMap(mapId), true);
     assert.notEqual(host.game.seed, oldSeed); assert.notEqual(host.game.round, oldRound);
   }
+});
+
+test('published physics poses and completed IDs reach guests without running client physics', async t => {
+  const { host, guest } = await createRoom(t);
+  guest.ready(true); await flush(); host.game.start();
+  const item = host.game.items.find(item => item.type === 'stone');
+  Object.assign(host.game.players[0], { x: item.x, z: item.z });
+  host.game.advance(.05); host.publish(); await flush();
+  const active = guest.snapshots.at(-1).claims.find(claim => claim.id === item.id);
+  assert.equal(active.done, false); assert.ok(active.pose.y < 0); assert.equal(active.pose.q.length, 4);
+  assert.deepEqual(guest.snapshots.at(-1), host.snapshots.at(-1));
+  assert.equal(guest.game, undefined, 'guests receive authority, never a second physics world');
+  host.game.advance(.5); host.game.advance(.5); host.publish(); await flush();
+  const fresh = JSON.parse(JSON.stringify(guest.snapshots.at(-1)));
+  assert.deepEqual(fresh.claims.find(claim => claim.id === item.id), { id: item.id, done: true });
+  assert.equal(createMap(fresh.mapId, fresh.seed).items.length, fresh.total);
+  assert.deepEqual(guest.snapshots.at(-1), host.snapshots.at(-1));
 });

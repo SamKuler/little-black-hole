@@ -49,3 +49,50 @@ test('night lights use cached emissive materials that are released with the map'
   for (const material of view.materials.values()) material.addEventListener('dispose', () => disposed++);
   const count = view.materials.size; view.dispose(); assert.equal(disposed, count);
 });
+
+test('body quaternion poses preserve the model origin and full dimensions without adding heading twice', () => {
+  const map = createMap('town', 42), view = new MapScene(new THREE.Scene(), map);
+  const item = { ...map.items.find(item => item.type === 'car'), rotation: Math.PI / 2 };
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(.3, .8, -.4));
+  const pose = { x: 2, y: -1.7, z: 3, q: q.toArray() };
+  view.pose(item, pose); view.flush();
+  for (const part of view.parts.get(item.id)) {
+    const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+    part.batch.getMatrixAt(part.index, matrix); matrix.decompose(position, rotation, scale);
+    assert.ok(position.distanceTo(new THREE.Vector3(pose.x, pose.y, pose.z)) < 1e-6);
+    assert.ok(1 - Math.abs(rotation.dot(q)) < 1e-6);
+    assert.ok(scale.distanceTo(new THREE.Vector3(1, 1, 1)) < 1e-6);
+  }
+  view.dispose();
+});
+
+test('every ground layer shares moving apertures while full items have no horizontal clip plane', () => {
+  const map = createMap('forest', 42), view = new MapScene(new THREE.Scene(), map);
+  view.setHoles([{ x: 3, z: -2, radius: 1.25 }, { x: 4, z: -2, radius: 2 }]);
+  const shaders = [];
+  for (const mesh of view.root.children) {
+    assert.equal(mesh.material.clippingPlanes, null, 'below-ground item fragments must survive through the opening');
+    assert.equal(mesh.material.depthWrite, true);
+    if (mesh.isInstancedMesh) {
+      assert.equal(mesh.material.onBeforeCompile, THREE.Material.prototype.onBeforeCompile);
+    } else {
+      const shader = { ...THREE.ShaderLib.standard, uniforms: {} };
+      mesh.material.onBeforeCompile(shader); shaders.push(shader);
+      assert.equal(shader.uniforms.holeCircles, view.apertures.uniforms.holeCircles);
+      assert.match(shader.fragmentShader, /if \(dot\(holeDelta, holeDelta\) < holeCircle.z \* holeCircle.z\) discard;/);
+      assert.equal(mesh.customDepthMaterial, view.depthMaterial);
+      assert.equal(mesh.customDistanceMaterial, view.distanceMaterial);
+    }
+  }
+  assert.ok(shaders.length > 0);
+  view.setHoles([{ x: -5, z: 7, radius: 3.125 }]);
+  for (const shader of shaders) {
+    assert.equal(shader.uniforms.holeCount.value, 1);
+    assert.deepEqual(shader.uniforms.holeCircles.value[0].toArray(), [-5, 7, 3.125]);
+    assert.deepEqual(shader.uniforms.holeCircles.value[1].toArray(), [0, 0, 0]);
+  }
+  let depthDisposals = 0, distanceDisposals = 0;
+  view.depthMaterial.addEventListener('dispose', () => depthDisposals++);
+  view.distanceMaterial.addEventListener('dispose', () => distanceDisposals++);
+  view.dispose(); assert.equal(depthDisposals, 1); assert.equal(distanceDisposals, 1);
+});

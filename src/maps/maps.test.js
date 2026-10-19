@@ -97,7 +97,7 @@ test('all maps can be cleared and every corner item may be left until last', () 
   }
 });
 
-test('objects do not overlap and static ground never covers the hole disk', () => {
+test('objects do not overlap and terrain layers stay below the mouth rim', () => {
   for (const { id, seed, map } of fixtures) {
     for (let a = 0; a < map.items.length; a++) for (let b = a + 1; b < map.items.length; b++) {
       const first = map.items[a], second = map.items[b];

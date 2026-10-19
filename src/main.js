@@ -3,9 +3,9 @@ import './style.css';
 import { LEVELS, levelForRadius } from './rules.js';
 import { createMap, MAPS, DEFAULT_MAP } from './maps/index.js';
 import { MapScene } from './render/map-scene.js';
-import { fallPose } from './fall.js';
+import { interpolatePose, interpolateHole } from './fall.js';
+import { createHoleVisual, setHoleApertureMask, disposeHoleVisual } from './render/hole-visual.js';
 import { availableItemNames } from './items/catalog.js';
-import { predictPosition } from './render/motion.js';
 import { Match, ROUND_SECONDS, modeName, standings } from './match.js';
 import { Room, validRoomCode } from './room.js';
 import { createMapPicker } from './ui/map-picker.js';
@@ -57,18 +57,12 @@ scene.add(sun);
 
 const sphereGeometry = new THREE.IcosahedronGeometry(1, 0);
 let map, mapScene;
-const hole = new THREE.Group(); scene.add(hole);
-const holeDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 80), new THREE.MeshBasicMaterial({ color: '#171520' }));
-holeDisk.rotation.x = -Math.PI / 2; holeDisk.position.y = .092; hole.add(holeDisk);
-const innerDisk = new THREE.Mesh(new THREE.CircleGeometry(.83, 80), new THREE.MeshBasicMaterial({ color: '#0d0c13' }));
-innerDisk.rotation.x = -Math.PI / 2; innerDisk.position.y = .095; hole.add(innerDisk);
-const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .048, 8, 80), new THREE.MeshStandardMaterial({ color: '#a68add', roughness: .85 }));
-ring.rotation.x = -Math.PI / 2; ring.position.y = .11; hole.add(ring);
-const outerRing = new THREE.Mesh(new THREE.RingGeometry(1.06, 1.1, 80), new THREE.MeshBasicMaterial({ color: '#c2b0e4', transparent: true, opacity: .55, side: THREE.DoubleSide }));
-outerRing.rotation.x = -Math.PI / 2; outerRing.position.y = .08; hole.add(outerRing);
+const hole = createHoleVisual(); scene.add(hole);
+const ring = hole.getObjectByName('ring');
 
 let particles = [], randomSeed = 24681, selectedMapId = DEFAULT_MAP;
-let snapshotAt = 0, hudKey = '', activeClaims = [], hiddenItems = new Set();
+let snapshotAt = 0, snapshotInterval = .1, hudKey = '', activeClaims = [], hiddenItems = new Set();
+let previousClaims = new Map(), previousPlayers = new Map();
 let view, game, room = null, selfId = 'local', selectedMode = 'free', roomMode = 'race';
 let lastTime = 0, comboCount = 0, toastUntil = 0, comboUntil = 0, lastFoodTime = -10;
 let busy = false, shownResultRound = null, lastPersonalEaten = 0, previousLevel = 0;
@@ -81,6 +75,7 @@ function random() { randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >
 function rebuildMap(seed, mapId) {
   mapScene?.dispose(); map = createMap(mapId, seed); randomSeed = seed;
   mapScene = new MapScene(scene, map);
+  setHoleApertureMask(hole, mapScene.apertures);
   $('.progress-meta > span').textContent = `${map.name}清空进度`;
   hiddenItems = new Set(); activeClaims = [];
   scene.background.set(map.sky); scene.fog.color.set(map.sky); cameraOffset.fromArray(map.cameraOffset);
@@ -95,7 +90,7 @@ function rebuildMap(seed, mapId) {
   $('#app').dataset.theme = map.theme || 'light';
   $('#world').setAttribute('aria-label', `3D ${map.name}游戏场景`);
   renderer.shadowMap.needsUpdate = true;
-  for (const visual of remoteHoles.values()) { scene.remove(visual); visual.children[2].material.dispose(); visual.children[3].material.dispose(); }
+  for (const visual of remoteHoles.values()) { scene.remove(visual); disposeHoleVisual(visual); }
   remoteHoles.clear();
   for (const p of particles) { scene.remove(p.mesh); p.mesh.material.dispose(); }
   particles = [];
@@ -119,11 +114,14 @@ function acceptSnapshot(snapshot) {
   if (room) selfId = room.selfId;
   const newRound = view?.round !== snapshot.round || view?.mapId !== snapshot.mapId || view?.seed !== snapshot.seed;
   const oldPhase = view?.phase;
+  previousClaims = new Map(newRound ? [] : view.claims.map(claim => [claim.id, claim]));
+  previousPlayers = new Map(newRound ? [] : view.players.map(player => [player.id, player]));
+  snapshotInterval = newRound ? .1 : Math.max(1 / 120, Math.min(.2, snapshot.elapsed - view.elapsed));
   view = snapshot; snapshotAt = performance.now();
   if (newRound) {
     rebuildMap(view.seed, view.mapId); comboCount = 0; lastFoodTime = -10; lastPersonalEaten = 0; previousLevel = 0;
     $('#combo').classList.remove('visible');
-    const player = me(); if (player) { hole.position.set(player.x, 0, player.z); hole.scale.setScalar(player.radius); cameraTarget.set(player.x - 7, 0, player.z); }
+    const player = me(); if (player) { hole.position.set(player.x, 0, player.z); hole.scale.set(player.radius, 1, player.radius); cameraTarget.set(player.x - 7, 0, player.z); }
   }
   const player = me();
   if (player && player.eaten > lastPersonalEaten) {
@@ -145,9 +143,9 @@ function acceptSnapshot(snapshot) {
   $('#pause').hidden = !inPlay;
   $('#paused-banner').hidden = view.phase !== 'paused' || !room;
   if (view.phase === 'paused') $('#paused-banner').textContent = room?.isHost ? '整局已暂停。' : '房主已暂停游戏，等待继续。';
-  activeClaims = view.claims.filter(claim => !claim.done);
   let changed = false;
-  for (const claim of view.claims) if (claim.done && !hiddenItems.has(claim.id)) { mapScene.hide(map.items[claim.id]); hiddenItems.add(claim.id); changed = true; }
+  for (const claim of view.claims) if (claim.done && (!claim.pose || newRound || !previousClaims.has(claim.id)) && !hiddenItems.has(claim.id)) { mapScene.hide(map.items[claim.id]); hiddenItems.add(claim.id); changed = true; }
+  activeClaims = view.claims.filter(claim => !hiddenItems.has(claim.id));
   if (changed) { mapScene.flush(); renderer.shadowMap.needsUpdate = true; }
   $('#app').classList.toggle('playing', inPlay || Boolean(room));
   $('#intro').inert = inPlay || Boolean(room);
@@ -387,29 +385,33 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min((now - lastTime) / 1000, .04); lastTime = now;
   const player = me(); if (!player) return;
-  const blend = 1 - Math.exp(-dt * 20);
-  const animationAge = view.phase === 'playing' ? Math.min((now - snapshotAt) / 1000, .15) : 0;
-  const position = predictPosition(player, animationAge, map.bounds);
-  hole.position.lerp(new THREE.Vector3(position.x, 0, position.z), blend);
-  hole.scale.setScalar(THREE.MathUtils.lerp(hole.scale.x, player.radius, blend)); ring.material.color.set(player.color);
+  // Bodies and apertures share one interpolation clock. A client cannot
+  // open ground ahead of a body, pull a prop with prediction, or award food.
+  const fraction = view.phase === 'playing' ? Math.min(1, (now - snapshotAt) / 1000 / snapshotInterval) : 1;
+  const position = interpolateHole(previousPlayers.get(player.id), player, fraction);
+  hole.position.set(position.x, 0, position.z);
+  hole.scale.set(position.radius, 1, position.radius); ring.material.color.set(player.color);
+  const mouths = player.online ? [position] : [];
   for (const other of view.players) {
     if (other.id === selfId || !other.online) continue;
     if (!remoteHoles.has(other.id)) {
-      const visual = hole.clone(true); visual.children[2].material = ring.material.clone(); visual.children[3].material = outerRing.material.clone();
-      visual.children[2].material.color.set(other.color); visual.position.set(other.x, 0, other.z); scene.add(visual); remoteHoles.set(other.id, visual);
+      const visual = createHoleVisual(other.color);
+      setHoleApertureMask(visual, mapScene.apertures);
+      scene.add(visual); remoteHoles.set(other.id, visual);
     }
     const visual = remoteHoles.get(other.id); visual.visible = true;
-    const position = predictPosition(other, animationAge, map.bounds);
-    visual.position.lerp(new THREE.Vector3(position.x, 0, position.z), blend);
-    visual.scale.setScalar(THREE.MathUtils.lerp(visual.scale.x, other.radius, blend));
+    const position = interpolateHole(previousPlayers.get(other.id), other, fraction);
+    visual.position.set(position.x, 0, position.z);
+    visual.scale.set(position.radius, 1, position.radius);
+    mouths.push(position);
   }
   for (const [id, visual] of remoteHoles) visual.visible = view.players.some(p => p.id === id && p.online);
-  const animationTime = view.elapsed + animationAge;
+  mapScene.setHoles(mouths);
   for (const claim of activeClaims) {
-    const item = map.items[claim.id], owner = view.players.find(p => p.id === claim.owner);
-    if (!owner) continue;
-    const visual = owner.id === selfId ? hole : remoteHoles.get(owner.id);
-    mapScene.pose(item, fallPose(item, claim, animationTime, visual?.position || owner, reducedMotion));
+    const item = map.items[claim.id];
+    if (hiddenItems.has(claim.id)) continue;
+    if (claim.done && fraction >= 1) { mapScene.hide(item); hiddenItems.add(claim.id); }
+    else mapScene.pose(item, interpolatePose(item, previousClaims.get(claim.id), claim, fraction));
   }
   if (activeClaims.length) { mapScene.flush(); renderer.shadowMap.needsUpdate = true; }
   if (view.phase !== 'paused') for (let i = particles.length - 1; i >= 0; i--) {

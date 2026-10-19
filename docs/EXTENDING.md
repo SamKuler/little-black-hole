@@ -29,15 +29,15 @@ pebble: {
 { type: 'pebble', x: 3, z: 5 }
 ```
 
-地图可覆盖 `color` 和 `rotation`。位置以世界单位表示；`rotation` 为绕竖直轴旋转的弧度。物品目录自动提供吞噬尺寸、积分、可吞噬提示、下落时长和模型参数。
+地图可覆盖 `color` 和 `rotation`。位置以世界单位表示；`rotation` 为绕竖直轴旋转的弧度。物品目录自动提供吞噬尺寸、积分、可吞噬提示、完整穿越尺寸包络和模型参数。
 
 | 字段 | 含义 |
 | --- | --- |
 | `name` | 游戏内物品名称 |
 | `model` | `MODEL_BUILDERS` 中的构造函数名称 |
-| `radius` | 包住模型水平投影的半径，用于吞噬尺寸及完整进入洞口的判断 |
+| `radius` | 包住模型水平投影的半径，用于可吞噬提示、激活范围与完整穿越的保守包络 |
 | `mass` | 吞噬后的成长质量，每单位质量计 10 分 |
-| `height` | 覆盖模型最高点的高度，与 `radius` 一起决定下落时长 |
+| `height` | 覆盖模型最高点的高度，与 `radius` 一起防止尚未落完就计分 |
 | `color` | 默认颜色，可由地图中的单件摆放覆盖 |
 
 `radius` 与 `height` 描述造型的实际尺寸。已有模型各自决定几何体大小；调整尺寸参数后，应运行模型包络测试核对造型。
@@ -56,6 +56,8 @@ mailbox({ box }, item) {
 `box(color, x, y, z, width, height, depth)` 与 `shape(kind, ...)` 都将几何体添加到局部原点的模型中。可使用的基础形状见该文件的 `geometries`。
 
 模型以地面为 `y=0`，向上为正。目录的 `radius` 要包住整个模型的水平投影，`height` 要覆盖最高点。`src/items/models.test.js` 会遍历实际模型顶点检查这两个条件。
+
+新增造型时，也要在 `src/physics/shapes.js` 的 `proxyParts` 中定义对应的复合凸体，保留树干、支脚、车轮等真正接触地面的部分，并运行 `src/physics/shapes.test.js` 与 `src/physics/world.test.js`。物理造型是简化近似，见[物理说明](PHYSICS.md)。
 
 `glow(color, x, y, z, width, height, depth)` 绘制发光长方体，可用于灯牌与车灯。发光强度作为材质缓存键的一部分，与同色普通材质分开复用。
 
