@@ -1,6 +1,9 @@
 import { Match, cleanName, MAX_PLAYERS } from './match.js';
+import { MAPS } from './maps/index.js';
 
-const PREFIX = 'little-black-hole-v2-';
+// Map layouts are rebuilt locally from snapshots. Keep clients with older
+// layouts/readiness messages out of these rooms to avoid simulation drift.
+const PREFIX = 'little-black-hole-v3-';
 export const validRoomCode = code => /^[A-Z2-9]{8}$/.test(code);
 export function newRoomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -47,7 +50,7 @@ export class Room {
       connection.on('data', message => {
         if (!this.connections.has(connection.peer) || !message || typeof message !== 'object') return;
         if (message.type === 'input') { this.beforeInput?.(); this.game.setInput(connection.peer, message.input); }
-        if (message.type === 'ready') { this.game.setReady(connection.peer, message.ready); this.publish(); }
+        if (message.type === 'ready' && message.round === this.game.round) { this.game.setReady(connection.peer, message.ready); this.publish(); }
       });
       const remove = () => { if (this.connections.delete(connection.peer)) { this.game.removePlayer(connection.peer); this.publish(); } };
       connection.on('close', remove); connection.on('error', () => { remove(); connection.close(); });
@@ -64,7 +67,7 @@ export class Room {
       connection.on('data', message => {
         if (this.closed || !message || typeof message !== 'object') return;
         if (message.type === 'rejected') { clearTimeout(timeout); reject(new Error(message.message)); this.fail(message.message); }
-        if (message.type === 'snapshot') { clearTimeout(timeout); this.onSnapshot(message.snapshot); resolve(); }
+        if (message.type === 'snapshot') { clearTimeout(timeout); this.round = message.snapshot.round; this.onSnapshot(message.snapshot); resolve(); }
       });
       connection.on('close', () => { clearTimeout(timeout); if (!this.closed) { reject(new Error('房主已离开，房间已结束。')); this.fail('房主已离开，房间已结束。'); } });
       connection.on('error', () => { clearTimeout(timeout); reject(new Error('无法连接房主，请重新加入。')); this.fail('与房主的连接发生错误，请重新加入。'); });
@@ -73,7 +76,7 @@ export class Room {
   }
   publish() {
     if (!this.game || this.closed) return;
-    const snapshot = this.game.snapshot(); this.onSnapshot(snapshot);
+    const snapshot = this.game.snapshot(); this.round = snapshot.round; this.onSnapshot(snapshot);
     for (const connection of this.connections.values()) if (connection.open) connection.send({ type: 'snapshot', snapshot });
   }
   input(input) {
@@ -82,13 +85,30 @@ export class Room {
   }
   ready(ready) {
     if (this.isHost) { this.game.setReady(this.selfId, ready); this.publish(); }
-    else if (this.hostConnection?.open) this.hostConnection.send({ type: 'ready', ready });
+    else if (this.hostConnection?.open) this.hostConnection.send({ type: 'ready', ready, round: this.round });
+  }
+  selectMap(mapId) {
+    if (this.closed || !this.isHost || this.game?.phase !== 'lobby' || typeof mapId !== 'string' || !Object.hasOwn(MAPS, mapId) || mapId === this.game.mapId) return false;
+    this.#resetLobby(mapId, this.game.players);
+    return true;
+  }
+  #resetLobby(mapId, players) {
+    const old = this.game;
+    // Rapid map changes and rematches can occur within the same millisecond.
+    // A new round must still get a different layout seed.
+    const now = Date.now() >>> 0;
+    const seed = now === old.seed ? (now + 1) >>> 0 : now;
+    this.game = new Match(old.mode, seed, mapId);
+    for (const player of players) {
+      this.game.addPlayer(player.id, player.name);
+      Object.assign(this.game.players.at(-1), { color: player.color, online: player.online, ready: player.id === this.selfId });
+    }
+    this.publish();
   }
   rematch() {
-    const old = this.game;
-    this.game = new Match(old.mode, undefined, old.mapId);
-    for (const player of old.players.filter(player => player.online)) this.game.addPlayer(player.id, player.name);
-    this.publish();
+    if (this.closed || !this.isHost || this.game?.phase !== 'finished') return false;
+    this.#resetLobby(this.game.mapId, this.game.players.filter(player => player.online));
+    return true;
   }
   fail(message) { if (!this.closed) { this.onError(message); this.close(); } }
   close() {

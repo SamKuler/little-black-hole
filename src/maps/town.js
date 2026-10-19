@@ -1,71 +1,78 @@
-function createPlacements(seed) {
-  const items = [];
-  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-  const add = (type, x, z, color) => items.push({ type, x, z, ...(color ? { color } : {}) });
-  const colors = ['#e4c8a6', '#c8c1d6', '#c5d7cb', '#dcae9e', '#b8cdd8', '#e4d7ae'];
-  const blocks = [-23, -7.5, 7.5, 23];
-  let count = 0;
-  for (const x of blocks) for (const z of blocks) {
-    if (x === 7.5 && z === 7.5) continue;
-    const type = Math.abs(x) === 23 && count % 2 === 0 ? 'tower' : count % 3 === 0 ? 'shop' : 'house';
-    add(type, x, z, colors[count++ % colors.length]);
-    if (type !== 'tower') add('house', x + (x > 0 ? 3.7 : -3.7), z + (z > 0 ? 2 : -2), colors[count % colors.length]);
-  }
-  for (let i = 0; i < 48; i++) {
-    const x = blocks[i % 4] + (i % 2 ? 4.8 : -4.8);
-    const z = blocks[Math.floor(i / 4) % 4] + ((i * 3) % 5 - 2) * 2;
-    if (Math.abs(x) < 29.5 && Math.abs(z) < 29.5) add(i % 3 ? 'tree' : 'pine', x, z);
-  }
-  for (let i = 0; i < 20; i++) {
-    const road = [-15, 0, 15][i % 3], at = -26 + Math.floor(i / 3) * 8;
-    add('car', i % 2 ? road + 1.6 : at, i % 2 ? at : road + 1.6, ['#e5b878', '#c07f7d', '#acc9c4', '#d1cee1', '#e6ddc2'][i % 5]);
-  }
-  for (let i = 0; i < 100; i++) {
-    let x, z;
-    if (i < 28) {
-      const angle = i * 2.39996, r = 2.2 + Math.sqrt(i / 28) * 8.5;
-      x = 7.5 + Math.cos(angle) * r; z = 7.5 + Math.sin(angle) * r;
-    } else {
-      const road = [-15, 0, 15][i % 3], at = random() * 56 - 28;
-      x = i % 2 ? road + (i % 4 < 2 ? 3.2 : -3.2) : at;
-      z = i % 2 ? at : road + (i % 4 < 2 ? 3.2 : -3.2);
+import { createLayout, nearLine } from './layout.js';
+
+const BOUNDS = 56;
+const SPAWNS = [{ x: -24, z: -24 }, { x: 24, z: 24 }, { x: 24, z: -24 }, { x: -24, z: 24 }];
+const ROADS = [-24, 0, 24];
+
+function drawTown(layout) {
+  const { box, surface } = layout;
+  box('#b7cbbf', 0, 0, 114, 114, -1.1, 2);
+  box('#a9c5a5', 0, 0, 114, 114, -.12, .22);
+  // Four districts have different paving, planting, and a readable central boulevard.
+  surface('#b8cca3', -26, -26, 44, 44);
+  surface('#d1c6ae', 26, -26, 44, 44);
+  surface('#a4c6b0', -26, 26, 44, 44);
+  surface('#bac9c4', 26, 26, 44, 44);
+  for (const a of ROADS) {
+    box('#e6e2cf', a, 0, 8, 104, .055, .06); box('#929fa1', a, 0, 5.8, 104, .09, .02);
+    box('#e6e2cf', 0, a, 104, 8, .057, .06); box('#929fa1', 0, a, 104, 5.8, .092, .02);
+    for (let b = -49; b <= 49; b += 3.5) if (!nearLine(b, ROADS, 4.6)) {
+      box('#e4e7d9', a, b, .13, 1.25, .11, .012); box('#e4e7d9', b, a, 1.25, .13, .112, .012);
     }
-    add(i % 4 === 0 ? 'cone' : i % 3 === 0 ? 'bush' : 'stone', x, z);
   }
-  for (let i = 0; i < 18; i++) {
-    const road = [-15, 0, 15][i % 3], at = -25 + Math.floor(i / 3) * 10;
-    add(i % 2 ? 'lamp' : 'bench', road + 3.6, at);
+  for (const x of ROADS) for (const z of ROADS) for (let k = -2; k <= 2; k++) {
+    box('#f1eee1', x + k * .8, z + 3.4, .4, 1.3, .13, .012);
+    box('#f1eee1', x + 3.4, z + k * .8, 1.3, .4, .132, .012);
   }
-  return items;
+  // A long east-side canal and three timber bridges break up the street grid.
+  box('#d6cbb1', 41, 0, 9, 106, .04, .04);
+  box('#72a7ae', 41, 0, 6.2, 106, .065, .03);
+  for (const z of [-24, 0, 24]) {
+    box('#d3b58b', 41, z, 10, 6.1, .14, .08);
+    for (let x = 37; x <= 45; x += 1) box('#b29273', x, z, .07, 6.1, .19, .015);
+  }
+  // The park, orchard, market court, and station forecourt are distinct destinations.
+  surface('#8eb79b', -12, 12, 15, 15);
+  box('#d9d8bb', -12, 12, 6.4, 8.4, .06, .05);
+  box('#78acb4', -12, 12, 4.8, 6.8, .09, .03);
+  surface('#c4bc9e', -37, -35, 16, 18);
+  for (let x = -43; x <= -31; x += 4) box('#91b58b', x, -35, 2.3, 17, .055, .035);
+  surface('#e1c7a9', 12, -12, 16, 15);
+  for (let x = 7; x <= 17; x += 2.5) box('#c9b497', x, -12, .07, 15, .06, .02);
+  surface('#d4d9ce', 12, 12, 16, 15);
+  for (const spawn of SPAWNS) {
+    box('#d9dfcb', spawn.x, spawn.z, 4.5, 4.5, .145, .035);
+    box('#ece6d3', spawn.x, spawn.z, 2.6, 2.6, .17, .025);
+  }
 }
 
-function createSurfaces() {
-  const surfaces = [];
-  const box = (color, x, y, z, width, height, depth) => surfaces.push({ color, position: [x, y, z], size: [width, height, depth] });
-  box('#c3d4d2', 0, -1.1, 0, 82, 2, 82);
-  box('#a9c5b7', 0, -.12, 0, 82, .22, 82);
-  for (const x of [-15, 0, 15]) {
-    box('#e0e4d9', x, -.005, 0, 7.4, .06, 64); box('#9baeb4', x, .03, 0, 5.8, .02, 64);
-  }
-  for (const z of [-15, 0, 15]) {
-    box('#e0e4d9', 0, 0, z, 64, .06, 7.4); box('#9baeb4', 0, .032, z, 64, .02, 5.8);
-  }
-  for (const a of [-15, 0, 15]) for (let b = -29; b <= 29; b += 3) {
-    if ([-15, 0, 15].every(c => Math.abs(b - c) > 4)) {
-      box('#dce1d4', a, .055, b, .11, .012, 1.1); box('#dce1d4', b, .057, a, 1.1, .012, .11);
-    }
-  }
-  for (const x of [-15, 0, 15]) for (const z of [-15, 0, 15]) for (let k = -2; k <= 2; k++) {
-    box('#eef0e5', x + k * .7, .065, z + 3.1, .35, .012, 1.2); box('#eef0e5', x + 3.1, .066, z + k * .7, 1.2, .012, .35);
-  }
-  box('#d9dfd1', 7.4, .03, 7.4, 7.4, .07, 7.4);
-  for (let x = 4.5; x <= 10.5; x += 1.5) for (let z = 4.5; z <= 10.5; z += 1.5) box('#c7d0c4', x, .071, z, .025, .012, 1.45);
-  return surfaces;
+function create(seed) {
+  const layout = createLayout(BOUNDS, seed, SPAWNS);
+  const { add, scatter, integer, range } = layout;
+  drawTown(layout);
+  layout.starters(['stone', 'bush', 'cone'], ['bench', 'lamp']);
+  const onLand = (x, z, radius) => (Math.abs(x - 41) > 3.7 + radius || nearLine(z, ROADS, 2)) && !(Math.abs(x + 12) < 3.5 + radius && Math.abs(z - 12) < 4.5 + radius);
+  const offRoad = (x, z, radius) => !nearLine(x, ROADS, radius + 3.7) && !nearLine(z, ROADS, radius + 3.7) && onLand(x, z, radius);
+  // Some district anchors are regular; smaller streets and lots fill differently every seed.
+  for (const [x, z, type] of [[-12, -12, 'house'], [12, -12, 'shop'], [12, 12, 'tower'], [-36, 12, 'house'], [12, 36, 'tower'], [-12, -38, 'shop']]) add(type, x, z);
+  scatter(integer(36, 44), ['house', 'house', 'shop', 'tower'], {
+    valid: offRoad,
+    colors: { house: ['#e4c8a6', '#c5d7cb', '#e1c3b7'], shop: ['#dcae9e', '#e4d7ae'], tower: ['#b8cdd8', '#c8c1d6'] },
+  });
+  scatter(integer(38, 48), ['car'], {
+    valid: onLand, colors: { car: ['#e5b878', '#acc9c4', '#c07f7d'] },
+    position: () => { const road = layout.pick(ROADS), at = range(-46, 46); return layout.random() < .5 ? { x: road + 1.6, z: at } : { x: at, z: road + 1.6 }; },
+  });
+  scatter(integer(102, 124), ['tree', 'tree', 'pine', 'bench', 'lamp'], { valid: onLand });
+  scatter(integer(230, 270), ['stone', 'bush', 'bush', 'cone'], { valid: onLand });
+  layout.fillGaps(['stone', 'bush', 'cone'], onLand);
+  return { placements: layout.placements, surfaces: layout.surfaces };
 }
 
 export const townMap = {
-  id: 'town', name: '悠闲小镇', bounds: 40,
-  spawns: [{ x: 5, z: 5 }, { x: 10, z: 5 }, { x: 5, z: 10 }, { x: 10, z: 10 }],
-  sky: '#e4edf0', cameraOffset: [32, 44, 38],
-  create(seed) { return { placements: createPlacements(seed), surfaces: createSurfaces() }; },
+  id: 'town', name: '悠闲小镇', bounds: BOUNDS, theme: 'light', preview: '/maps/town.jpg',
+  spawns: SPAWNS, sky: '#e4edf0', cameraOffset: [32, 44, 38],
+  fog: [82, 160],
+  lighting: { ambientIntensity: 2.1, sunIntensity: 2.8, exposure: 1.08 },
+  create,
 };

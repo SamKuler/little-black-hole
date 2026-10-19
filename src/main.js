@@ -8,6 +8,7 @@ import { availableItemNames } from './items/catalog.js';
 import { predictPosition } from './render/motion.js';
 import { Match, ROUND_SECONDS, modeName, standings } from './match.js';
 import { Room, validRoomCode } from './room.js';
+import { createMapPicker } from './ui/map-picker.js';
 
 const $ = selector => document.querySelector(selector);
 const icons = {
@@ -43,7 +44,7 @@ scene.fog = new THREE.Fog('#e4edf0', 65, 125);
 const camera = new THREE.OrthographicCamera(-30, 30, 22, -22, .1, 180);
 const cameraTarget = new THREE.Vector3(0, 0, 0);
 const cameraOffset = new THREE.Vector3(32, 44, 38);
-scene.add(new THREE.HemisphereLight('#fff8ed', '#8da7a7', 2.8));
+const ambient = new THREE.HemisphereLight('#fff8ed', '#8da7a7', 2.8); scene.add(ambient);
 const sun = new THREE.DirectionalLight('#fff3dd', 3.2);
 sun.position.set(-22, 45, 18);
 sun.castShadow = true;
@@ -83,6 +84,16 @@ function rebuildMap(seed, mapId) {
   $('.progress-meta > span').textContent = `${map.name}清空进度`;
   hiddenItems = new Set(); activeClaims = [];
   scene.background.set(map.sky); scene.fog.color.set(map.sky); cameraOffset.fromArray(map.cameraOffset);
+  scene.fog.near = map.fog?.[0] ?? 78; scene.fog.far = map.fog?.[1] ?? 160;
+  const lighting = map.lighting || {};
+  ambient.color.set(lighting.skyLight || '#fff8ed'); ambient.groundColor.set(lighting.groundLight || '#8da7a7'); ambient.intensity = lighting.ambientIntensity ?? 2.8;
+  sun.color.set(lighting.sunColor || '#fff3dd'); sun.intensity = lighting.sunIntensity ?? 3.2;
+  renderer.toneMappingExposure = lighting.exposure ?? 1.25;
+  sun.position.set(-map.bounds * .55, map.bounds * 1.5, map.bounds * .45);
+  const extent = map.bounds * 1.5;
+  Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, far: map.bounds * 4 }); sun.shadow.camera.updateProjectionMatrix();
+  $('#app').dataset.theme = map.theme || 'light';
+  $('#world').setAttribute('aria-label', `3D ${map.name}游戏场景`);
   renderer.shadowMap.needsUpdate = true;
   for (const visual of remoteHoles.values()) { scene.remove(visual); visual.children[2].material.dispose(); visual.children[3].material.dispose(); }
   remoteHoles.clear();
@@ -106,7 +117,7 @@ function playerList(target, players, lobby = false) {
 function acceptSnapshot(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.players) || !Array.isArray(snapshot.claims)) return;
   if (room) selfId = room.selfId;
-  const newRound = view?.round !== snapshot.round;
+  const newRound = view?.round !== snapshot.round || view?.mapId !== snapshot.mapId || view?.seed !== snapshot.seed;
   const oldPhase = view?.phase;
   view = snapshot; snapshotAt = performance.now();
   if (newRound) {
@@ -148,19 +159,23 @@ function acceptSnapshot(snapshot) {
   $('#room-panel').hidden = !room || view.phase !== 'lobby';
   $('#leaderboard').hidden = !room || !inPlay;
   $('#restart span').textContent = room ? '离开房间' : '重新开始';
-  $('#restart').title = room ? '离开房间' : '重新生成小镇';
+  $('#restart').title = room ? '离开房间' : `重新生成${map.name}`;
   if (room && view.phase === 'lobby') {
     $('#invite-code').textContent = room.code;
-    $('#room-description').textContent = view.mode === 'race' ? '120 秒同场抢吃，按吞噬得分排名。' : '一起清空小镇，共享成长，记录各自贡献。';
+    $('#room-description').textContent = view.mode === 'race' ? '120 秒竞赛' : '合作清空';
+    roomMapPicker.setValue(view.mapId);
+    roomMapPicker.setDisabled(!room.isHost);
+    $('#room-map-picker').hidden = !room.isHost;
+    $('#room-map-name').hidden = room.isHost;
+    const mapName = mapChoices.find(choice => choice.id === view.mapId)?.label || map.name;
+    if ($('#room-map-name').textContent !== mapName) $('#room-map-name').textContent = mapName;
     playerList($('#lobby-players'), view.players, true);
     if (room.isHost) {
       const ready = view.players.length >= 2 && view.players.every(p => p.ready);
       $('#room-start').disabled = !ready;
       $('#room-start').textContent = ready ? '开始游戏' : view.players.length < 2 ? '等待朋友加入' : '等待大家准备';
-      $('#lobby-note').textContent = '所有人准备后，由房主同步开启。';
     } else {
       $('#room-start').disabled = false; $('#room-start').textContent = player?.ready ? '取消准备' : '准备好了';
-      $('#lobby-note').textContent = '准备好后等待房主开局。';
     }
   }
   const rankingKey = room ? JSON.stringify(view.players.map(p => [p.id, p.mass, p.eaten, p.online])) : '';
@@ -194,7 +209,7 @@ function updateHUD() {
   $('#clock strong').textContent = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
   $('#clock').classList.toggle('urgent', remaining <= 20);
 }
-function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); toastUntil = performance.now() + 3200; }
+function toast(message) { $('#toast-status').textContent = message; $('#toast').textContent = message; $('#toast').classList.add('visible'); toastUntil = performance.now() + 3200; }
 function playSound(levelUp = false) {
   if (!soundOn) return;
   audioContext ??= new (window.AudioContext || window.webkitAudioContext)(); void audioContext.resume();
@@ -214,8 +229,7 @@ function singleGame(mode, started = false) {
 function selectMode(mode) {
   selectedMode = mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
-  $('#network-form').hidden = mode !== 'online'; $('#start').hidden = mode === 'online'; $('#mode-note').hidden = mode === 'online';
-  $('#mode-note').textContent = mode === 'timed' ? '限时 120 秒，按吞噬得分结算。' : '无时间限制，清空地图后结算。';
+  $('#network-form').hidden = mode !== 'online'; $('#start').hidden = mode === 'online';
   if (!room) singleGame(mode === 'online' ? 'free' : mode);
 }
 function showHome() {
@@ -223,7 +237,7 @@ function showHome() {
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   const url = new URL(location.href); url.searchParams.delete('room'); history.replaceState(null, '', url);
   $('#invite-link').hidden = true; $('#create-room').disabled = $('#join-room').disabled = false;
-  selectMode(selectedMode); $('#network-status').textContent = '2–4 人，分享房间链接就能一起玩。';
+  selectMode(selectedMode); $('#network-status').textContent = '';
 }
 function networkFailure(message) {
   const wasPlaying = room && ['playing', 'paused'].includes(view.phase);
@@ -293,7 +307,13 @@ document.addEventListener('keydown', event => {
 document.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 window.addEventListener('blur', () => { stopInput(); if (!room) pauseGame(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { stopInput(); if (!room) pauseGame(); } });
-$('#start').addEventListener('click', () => { singleGame(selectedMode, true); $('#start').blur(); });
+$('#start').addEventListener('click', () => {
+  // Start the previewed layout so its displayed object count remains accurate.
+  if (!room && game?.phase === 'lobby' && game.mapId === selectedMapId && game.mode === selectedMode) {
+    game.start(); acceptSnapshot(game.snapshot());
+  }
+  $('#start').blur();
+});
 $('#pause').addEventListener('click', pauseGame);
 $('#pause-dialog').addEventListener('close', () => { setSessionPaused(false); $('#pause').blur(); });
 $('#sound').addEventListener('click', () => { soundOn = !soundOn; $('#sound').innerHTML = icon(soundOn ? 'sound' : 'muted'); $('#sound').setAttribute('aria-label', soundOn ? '关闭音效' : '开启音效'); $('#sound').title = soundOn ? '关闭音效' : '开启音效'; $('#sound').blur(); if (soundOn) playSound(); });
@@ -404,10 +424,18 @@ function frame(now) {
   camera.left = -halfHeight * aspect; camera.right = halfHeight * aspect; camera.top = halfHeight; camera.bottom = -halfHeight;
   camera.position.copy(cameraTarget).add(cameraOffset); camera.lookAt(cameraTarget); camera.updateProjectionMatrix(); renderer.render(scene, camera);
 }
-for (const definition of Object.values(MAPS)) { const option = document.createElement('option'); option.value = definition.id; option.textContent = definition.name; $('#map-select').append(option); }
-$('#map-choice').hidden = Object.keys(MAPS).length < 2;
-$('#map-select').addEventListener('change', () => { selectedMapId = $('#map-select').value; selectMode(selectedMode); });
+const mapChoices = Object.values(MAPS).map(({ id, name, preview }) => ({ id, label: name, preview }));
+const homeMapPicker = createMapPicker($('#map-picker'), mapChoices, mapId => {
+  if (room || busy) return false;
+  selectedMapId = mapId; selectMode(selectedMode);
+});
+const roomMapPicker = createMapPicker($('#room-map-picker'), mapChoices, mapId => {
+  if (!room?.isHost || !room.selectMap(mapId)) return false;
+  selectedMapId = view.mapId; homeMapPicker.setValue(selectedMapId);
+});
+homeMapPicker.setValue(selectedMapId);
+$('#map-choice').hidden = mapChoices.length < 2;
 selectMode('free');
 const invite = new URLSearchParams(location.search).get('room')?.toUpperCase();
-if (invite) { selectMode('online'); $('#room-code').value = invite; $('#network-status').textContent = '朋友邀请你来吞噬，填写昵称后加入房间。'; }
+if (invite) { selectMode('online'); $('#room-code').value = invite; }
 requestAnimationFrame(frame); $('#loading').classList.add('loaded'); $('#loading').setAttribute('aria-hidden', 'true');
