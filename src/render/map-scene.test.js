@@ -25,3 +25,27 @@ test('a rotated car tips toward the mouth in world space', () => {
   const up = new THREE.Vector3(0, 1, 0).transformDirection(matrix);
   assert.ok(up.x < 0); assert.ok(Math.abs(up.z) < 1e-6); view.dispose();
 });
+
+test('organic ground polygons preserve world dimensions and face upward after batching', () => {
+  const map = { surfaces: [{ color: '#719f83', position: [4, .04, -2], size: [12, .001, 8], points: [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]] }], items: [] };
+  const view = new MapScene(new THREE.Scene(), map), geometry = view.root.children[0].geometry;
+  geometry.computeBoundingBox();
+  assert.ok(Math.abs(geometry.boundingBox.min.x + 2) < 1e-6);
+  assert.ok(Math.abs(geometry.boundingBox.max.x - 10) < 1e-6);
+  assert.ok(Math.abs(geometry.boundingBox.min.z + 6) < 1e-6);
+  assert.ok(Math.abs(geometry.boundingBox.max.z - 2) < 1e-6);
+  const normals = geometry.getAttribute('normal');
+  for (let i = 0; i < normals.count; i++) assert.ok(normals.getY(i) > .99);
+  view.dispose();
+});
+
+test('night lights use cached emissive materials that are released with the map', () => {
+  const view = new MapScene(new THREE.Scene(), createMap('cyberpunk', 42));
+  const glowing = [...view.materials.values()].filter(material => material.emissiveIntensity > 0);
+  assert.ok(glowing.length > 0);
+  const color = '#4ff4e8', normal = view.material(color), lit = view.material(color, true, 1.3);
+  assert.notEqual(normal, lit); assert.equal(lit, view.material(color, true, 1.3));
+  let disposed = 0;
+  for (const material of view.materials.values()) material.addEventListener('dispose', () => disposed++);
+  const count = view.materials.size; view.dispose(); assert.equal(disposed, count);
+});

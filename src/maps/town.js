@@ -70,7 +70,9 @@ function create(seed) {
 }
 
 export const townMap = {
-  id: 'town', name: '悠闲小镇', description: '运河、果园与街角集市，逛一座更热闹的小镇', bounds: BOUNDS,
+  id: 'town', name: '悠闲小镇', bounds: BOUNDS, theme: 'light', preview: '/maps/town.jpg',
   spawns: SPAWNS, sky: '#e4edf0', cameraOffset: [32, 44, 38],
+  fog: [82, 160],
+  lighting: { ambientIntensity: 2.1, sunIntensity: 2.8, exposure: 1.08 },
   create,
 };

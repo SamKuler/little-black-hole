@@ -63,31 +63,31 @@ export const MODEL_BUILDERS = {
     shape('cylinder', item.color, 0, 1.4, 0, .09, 2.8, .09);
     box(item.color, .25, 2.8, 0, .65, .12, .16); box('#fff0cc', .5, 2.7, 0, .4, .14, .3);
   },
-  neonCrate({ box }, item) {
+  neonCrate({ box, glow }, item) {
     box(item.color, 0, .29, 0, .6, .58, .6);
-    box(item.accent, 0, .59, 0, .61, .05, .1);
-    for (const x of [-.21, .21]) box(item.accent, x, .3, .306, .055, .48, .025);
-    box(item.accent, 0, .3, .306, .44, .055, .025);
+    glow(item.accent, 0, .59, 0, .61, .05, .1);
+    for (const x of [-.21, .21]) glow(item.accent, x, .3, .306, .055, .48, .025);
+    glow(item.accent, 0, .3, .306, .44, .055, .025);
   },
-  terminal({ box }, item) {
+  terminal({ box, glow }, item) {
     box(item.color, 0, .075, 0, 1.1, .15, 1.1);
     box(item.color, 0, .6, 0, .5, .9, .55);
     box(item.color, 0, 1.3, 0, 1.12, .7, .7);
-    box(item.accent, 0, 1.34, .365, 1, .48, .03);
+    glow(item.accent, 0, 1.34, .365, 1, .48, .03);
     box(item.color, -.14, 1.4, .385, .52, .055, .015);
     box(item.color, -.22, 1.26, .385, .36, .055, .015);
-    box('#ee63d8', 0, .83, .29, .34, .06, .06);
+    glow('#ee63d8', 0, .83, .29, .34, .06, .06);
   },
-  neonSign({ shape, box }, item) {
+  neonSign({ shape, box, glow }, item) {
     box(item.color, 0, .075, 0, .7, .15, .7);
     shape('cylinder', item.color, 0, 1.4, 0, .09, 2.8, .09);
     box(item.color, 0, 2.35, 0, 1.6, 1.65, .3);
-    for (const x of [-.76, .76]) box(item.accent, x, 2.35, .17, .06, 1.65, .05);
-    for (const y of [1.6, 3.1]) box(item.accent, 0, y, .17, 1.5, .06, .05);
-    box('#4ff4e8', -.22, 2.35, .17, .12, .95, .05);
-    for (const y of [2, 2.35, 2.7]) box('#4ff4e8', .1, y, .17, .52, .09, .05);
+    for (const x of [-.76, .76]) glow(item.accent, x, 2.35, .17, .06, 1.65, .05);
+    for (const y of [1.6, 3.1]) glow(item.accent, 0, y, .17, 1.5, .06, .05);
+    glow('#4ff4e8', -.22, 2.35, .17, .12, .95, .05);
+    for (const y of [2, 2.35, 2.7]) glow('#4ff4e8', .1, y, .17, .52, .09, .05);
   },
-  car({ shape, box }, item) {
+  car({ shape, box, glow }, item) {
     const lift = item.hover ? .2 : 0;
     const glass = item.glassColor ?? '#5f7d88', frame = item.frameColor ?? '#64818a', light = item.lightColor ?? '#fff0cc';
     box(item.color, 0, .65 + lift, 0, 1.35, .65, 2.6); box(item.color, 0, 1.1 + lift, -.15, 1.2, .5, 1.35);
@@ -98,12 +98,13 @@ export const MODEL_BUILDERS = {
         if (item.hover) shape('cylinder', light, k * .67, .38, j, .23, .12, .23);
         else shape('cylinder', '#3e4d54', k * .68, .4, j, .29, .16, .29).rotation.z = Math.PI / 2;
       }
-      box(light, k * .43, .7 + lift, 1.31, .28, .16, .03);
-      if (item.hover) box(light, k * .68, .69, -.15, .05, .07, 2.25);
+      (item.hover ? glow : box)(light, k * .43, .7 + lift, 1.31, .28, .16, .03);
+      if (item.hover) glow(light, k * .68, .69, -.15, .05, .07, 2.25);
     }
   },
-  building({ shape, box }, item) {
+  building({ shape, box, glow }, item) {
     const { width: w, depth: d, wallHeight: h, roof, style } = item.building;
+    const windowBox = style === 'neon' ? glow : box;
     const trim = item.trimColor ?? '#eee9dd', glass = item.glassColor ?? '#70959e';
     box(item.color, 0, h / 2, 0, w, h, d); box(trim, 0, h + .12, 0, w + .24, .25, d + .24);
     if (roof === 'gable') {
@@ -117,18 +118,18 @@ export const MODEL_BUILDERS = {
     }
     const rows = roof === 'flat' ? Math.floor(h / 1.65) : 1;
     for (let row = 0; row < rows; row++) for (const col of [-1, 1]) {
-      box(glass, col * w * .27, 1.7 + row * 1.55, d / 2 + .02, .7, .85, .04);
+      windowBox(glass, col * w * .27, 1.7 + row * 1.55, d / 2 + .02, .7, .85, .04);
       box(item.trimColor ?? '#e8e2d2', col * w * .27, 1.28 + row * 1.55, d / 2 + .08, .9, .1, .18);
-      box(item.glassColor ?? '#7899a0', w / 2 + .02, 1.7 + row * 1.55, col * d * .26, .04, .85, .7);
+      windowBox(item.glassColor ?? '#7899a0', w / 2 + .02, 1.7 + row * 1.55, col * d * .26, .04, .85, .7);
     }
     box(item.doorColor ?? '#6f8b8c', 0, .8, d / 2 + .03, .65, 1.6, .05);
     if (style === 'timber') {
       for (const x of [-1, 1]) box('#846747', x * (w / 2 - .08), h / 2, d / 2 + .035, .16, h, .1);
       for (const y of [.35, .75, 1.15, 1.55, 1.95, 2.35]) box('#846747', 0, y, -d / 2 - .025, w, .05, .05);
     } else if (style === 'neon') {
-      for (const x of [-1, 1]) box(item.accent, x * (w / 2 - .08), h / 2, d / 2 + .05, .1, h, .06);
-      box(item.accent, 0, h + .15, d / 2 + .15, w + .1, .12, .08);
-      box(item.accent, w / 2 + .15, h + .15, 0, .08, .12, d + .1);
+      for (const x of [-1, 1]) glow(item.accent, x * (w / 2 - .08), h / 2, d / 2 + .05, .1, h, .06);
+      glow(item.accent, 0, h + .15, d / 2 + .15, w + .1, .12, .08);
+      glow(item.accent, w / 2 + .15, h + .15, 0, .08, .12, d + .1);
       box(glass, -.55, h + .44, -.5, .14, .38, .14);
     }
   },
@@ -136,12 +137,13 @@ export const MODEL_BUILDERS = {
 
 export function createModel(item, material) {
   const group = new THREE.Group();
-  const shape = (kind, color, x, y, z, sx, sy, sz) => {
-    const mesh = new THREE.Mesh(geometries[kind], material(color));
+  const shape = (kind, color, x, y, z, sx, sy, sz, emission = 0) => {
+    const mesh = new THREE.Mesh(geometries[kind], material(color, true, emission));
     mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz); group.add(mesh); return mesh;
   };
   const box = (...args) => shape('box', ...args);
+  const glow = (...args) => shape('box', ...args, 1.3);
   const builder = MODEL_BUILDERS[item.model];
   if (!builder) throw new Error(`物品模型未注册：${item.model}`);
-  builder({ shape, box }, item); return group;
+  builder({ shape, box, glow }, item); return group;
 }

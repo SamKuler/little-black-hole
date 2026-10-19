@@ -12,7 +12,6 @@
       <div id="world" aria-label="3D 黑洞游戏场景"></div>
       <header class="topbar">
         <a class="brand" href="./" aria-label="小小黑洞首页"><span class="brand-hole"></span><span>小小黑洞</span></a>
-        <div id="clock" class="clock" hidden><span>剩余时间</span><strong>02:00</strong></div>
         <div class="top-actions"><span class="mode"><i></i><span id="mode-label">自由漫游</span></span><button id="sound" class="icon-button" aria-label="开启音效" title="开启音效"></button><button id="pause" class="icon-button" aria-label="暂停游戏" title="暂停游戏" disabled hidden></button></div>
       </header>
       <section id="intro" class="intro" aria-label="游戏模式与房间">
@@ -22,7 +21,7 @@
         <div class="menu-content">
           <div id="map-choice" class="map-selection" hidden>
             <span id="map-label" class="map-label">地图</span>
-            <div id="map-picker" class="map-picker" role="radiogroup" aria-labelledby="map-label"></div>
+            <div id="map-picker" class="map-picker"></div>
           </div>
           <button id="start" class="primary">开始吞噬 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
           <section id="network-form" hidden aria-label="创建或加入好友房间">
@@ -43,7 +42,7 @@
           <input id="invite-link" readonly aria-label="邀请链接" hidden />
           <div class="map-selection room-map-selection">
             <span id="room-map-label" class="map-label">地图</span>
-            <div id="room-map-picker" class="map-picker" role="radiogroup" aria-labelledby="room-map-label"></div>
+            <div id="room-map-picker" class="map-picker"></div>
             <span id="room-map-name" class="map-name" aria-live="polite" hidden></span>
           </div>
           <ol id="lobby-players" class="player-list"></ol>
@@ -51,9 +50,13 @@
         </div>
       </section>
       <aside id="leaderboard" class="leaderboard" aria-label="实时排名" hidden><h2>吞噬排名</h2><ol id="ranking-list" class="player-list"></ol></aside>
-      <div id="paused-banner" class="paused-banner" role="status" hidden></div>
-      <div id="toast" class="toast" role="status" aria-live="polite"></div>
-      <div id="combo" class="combo" aria-hidden="true"></div>
+      <div id="toast-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="game-feedback">
+        <div id="clock" class="clock" hidden><span>剩余时间</span><strong>02:00</strong></div>
+        <div id="paused-banner" class="paused-banner" role="status" hidden></div>
+        <div id="toast" class="toast" aria-hidden="true"></div>
+        <div id="combo" class="combo" aria-hidden="true"></div>
+      </div>
       <footer class="bottom-bar" hidden>
         <div class="controls-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v7M6 9h12"/></svg><span class="desktop-hint">按住拖动移动<small>也可使用 W A S D / 方向键</small></span><span class="mobile-hint">单指拖动移动</span></div>
         <section id="progress" class="progress-panel" aria-label="吞噬进度">

@@ -84,6 +84,7 @@ function rebuildMap(seed, mapId) {
   $('.progress-meta > span').textContent = `${map.name}清空进度`;
   hiddenItems = new Set(); activeClaims = [];
   scene.background.set(map.sky); scene.fog.color.set(map.sky); cameraOffset.fromArray(map.cameraOffset);
+  scene.fog.near = map.fog?.[0] ?? 78; scene.fog.far = map.fog?.[1] ?? 160;
   const lighting = map.lighting || {};
   ambient.color.set(lighting.skyLight || '#fff8ed'); ambient.groundColor.set(lighting.groundLight || '#8da7a7'); ambient.intensity = lighting.ambientIntensity ?? 2.8;
   sun.color.set(lighting.sunColor || '#fff3dd'); sun.intensity = lighting.sunIntensity ?? 3.2;
@@ -91,7 +92,7 @@ function rebuildMap(seed, mapId) {
   sun.position.set(-map.bounds * .55, map.bounds * 1.5, map.bounds * .45);
   const extent = map.bounds * 1.5;
   Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, far: map.bounds * 4 }); sun.shadow.camera.updateProjectionMatrix();
-  $('#app').dataset.map = map.id;
+  $('#app').dataset.theme = map.theme || 'light';
   $('#world').setAttribute('aria-label', `3D ${map.name}游戏场景`);
   renderer.shadowMap.needsUpdate = true;
   for (const visual of remoteHoles.values()) { scene.remove(visual); visual.children[2].material.dispose(); visual.children[3].material.dispose(); }
@@ -208,7 +209,7 @@ function updateHUD() {
   $('#clock strong').textContent = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
   $('#clock').classList.toggle('urgent', remaining <= 20);
 }
-function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); toastUntil = performance.now() + 3200; }
+function toast(message) { $('#toast-status').textContent = message; $('#toast').textContent = message; $('#toast').classList.add('visible'); toastUntil = performance.now() + 3200; }
 function playSound(levelUp = false) {
   if (!soundOn) return;
   audioContext ??= new (window.AudioContext || window.webkitAudioContext)(); void audioContext.resume();
@@ -423,8 +424,7 @@ function frame(now) {
   camera.left = -halfHeight * aspect; camera.right = halfHeight * aspect; camera.top = halfHeight; camera.bottom = -halfHeight;
   camera.position.copy(cameraTarget).add(cameraOffset); camera.lookAt(cameraTarget); camera.updateProjectionMatrix(); renderer.render(scene, camera);
 }
-const mapLabels = { town: '小镇', forest: '森林', cyberpunk: '霓虹' };
-const mapChoices = Object.values(MAPS).map(definition => ({ id: definition.id, label: mapLabels[definition.id] || definition.name }));
+const mapChoices = Object.values(MAPS).map(({ id, name, preview }) => ({ id, label: name, preview }));
 const homeMapPicker = createMapPicker($('#map-picker'), mapChoices, mapId => {
   if (room || busy) return false;
   selectedMapId = mapId; selectMode(selectedMode);

@@ -12,11 +12,31 @@ export function createLayout(bounds, seed, spawns) {
   const integer = (min, max) => Math.floor(range(min, max + 1));
   const pick = values => values[integer(0, values.length - 1)];
   // Decorative layers use shallow relief so roads and bridges never cover the hole.
-  const box = (color, x, z, width, depth, y = .025, height = .04) => {
+  const box = (color, x, z, width, depth, y = .025, height = .04, emission = 0) => {
     const relief = y >= 0 ? 1 / 3 : 1;
-    surfaces.push({ color, position: [x, y * relief, z], size: [width, height * relief, depth] });
+    surfaces.push({ color, position: [x, y * relief, z], size: [width, height * relief, depth], emission });
   };
   const surface = (color, x, z, width, depth) => box(color, x, z, width, depth);
+  const polygon = (color, points, y = .025) => {
+    const xs = points.map(point => point[0]), zs = points.map(point => point[1]);
+    const width = Math.max(...xs) - Math.min(...xs), depth = Math.max(...zs) - Math.min(...zs);
+    const x = (Math.min(...xs) + Math.max(...xs)) / 2, z = (Math.min(...zs) + Math.max(...zs)) / 2;
+    surfaces.push({ color, position: [x, y, z], size: [width, .001, depth], points: points.map(([px, pz]) => [(px - x) / width, (pz - z) / depth]) });
+  };
+  const path = (color, points, width, y = .025) => {
+    const left = [], right = [];
+    points.forEach(([x, z], i) => {
+      const previous = points[Math.max(0, i - 1)], next = points[Math.min(points.length - 1, i + 1)];
+      const dx = next[0] - previous[0], dz = next[1] - previous[1], length = Math.hypot(dx, dz);
+      left.push([x - dz / length * width / 2, z + dx / length * width / 2]);
+      right.push([x + dz / length * width / 2, z - dx / length * width / 2]);
+    });
+    polygon(color, [...left, ...right.reverse()], y);
+  };
+  const clearing = (color, x, z, width, depth, y = .025) => polygon(color, Array.from({ length: 14 }, (_, i) => {
+    const angle = i / 14 * Math.PI * 2, edge = 1 + .08 * Math.sin(i * 2.4);
+    return [x + Math.cos(angle) * width / 2 * edge, z + Math.sin(angle) * depth / 2 * edge];
+  }), y);
   const add = (type, x, z, options = {}) => {
     const radius = ITEM_CATALOG[type].radius;
     // The inset leaves every corner collectible even if its object is saved for last.
@@ -63,7 +83,15 @@ export function createLayout(bounds, seed, spawns) {
       }
     }
   };
-  return { random, range, integer, pick, placements, surfaces, box, surface, add, scatter, starters, fillGaps };
+  return { random, range, integer, pick, placements, surfaces, box, surface, polygon, path, clearing, add, scatter, starters, fillGaps };
 }
 
 export function nearLine(value, lines, distance) { return lines.some(line => Math.abs(value - line) < distance); }
+
+export function nearPath(x, z, points, distance) {
+  return points.slice(1).some(([bx, bz], i) => {
+    const [ax, az] = points[i], dx = bx - ax, dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(x - ax - t * dx, z - az - t * dz) < distance;
+  });
+}

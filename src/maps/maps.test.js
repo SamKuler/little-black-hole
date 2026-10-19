@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createMap, MAPS } from './index.js';
 import { ITEM_CATALOG } from '../items/catalog.js';
@@ -7,7 +8,7 @@ import { Match } from '../match.js';
 import { START_RADIUS, fitsHole, radiusForMass, canSwallow, clampPosition } from '../rules.js';
 
 const THEMES = ['town', 'forest', 'cyberpunk'];
-const SEEDS = [0, 1, 42, 24681, 98765, 0xffffffff, ...Array.from({ length: 12 }, (_, i) => Math.imul(i + 1, 2654435761) >>> 0)];
+const SEEDS = [0, 1, 42, 24681, 98765, 683129967, 0xffffffff, ...Array.from({ length: 12 }, (_, i) => Math.imul(i + 1, 2654435761) >>> 0)];
 const fixtures = THEMES.flatMap(id => SEEDS.map(seed => ({ id, seed, map: createMap(id, seed) })));
 const courtyard = {
   id: 'courtyard-test', name: '庭院', bounds: 12, spawns: [{ x: -4, z: 0 }, { x: 4, z: 0 }], sky: '#e4edf0', cameraOffset: [16, 25, 20],
@@ -124,4 +125,12 @@ test('the match uses map birth points and bounds rather than town constants', ()
     for (let i = 0; i < 100; i++) { match.setInput('host', { x: 1, z: 0 }); match.advance(.1); }
     assert.equal(match.players[0].x, 10.8);
   } finally { delete MAPS[courtyard.id]; }
+});
+
+test('every registered map supplies a real scene thumbnail and a shared UI theme', () => {
+  for (const definition of Object.values(MAPS)) {
+    assert.ok(['light', 'dark'].includes(definition.theme));
+    const bytes = readFileSync(new URL(`../../public${definition.preview}`, import.meta.url));
+    assert.ok(bytes.length > 0, `${definition.id} preview asset is present`);
+  }
 });

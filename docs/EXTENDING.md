@@ -57,6 +57,8 @@ mailbox({ box }, item) {
 
 模型以地面为 `y=0`，向上为正。目录的 `radius` 要包住整个模型的水平投影，`height` 要覆盖最高点。`src/items/models.test.js` 会遍历实际模型顶点检查这两个条件。
 
+`glow(color, x, y, z, width, height, depth)` 绘制发光长方体，可用于灯牌与车灯。发光强度作为材质缓存键的一部分，与同色普通材质分开复用。
+
 渲染器将相同原型按材质合并、再实例化绘制。物体下落只更新实例矩阵。地图作者和模型作者沿用这条绘制路径即可。
 
 ## 添加地图
@@ -67,6 +69,8 @@ mailbox({ box }, item) {
 export const courtyardMap = {
   id: 'courtyard',
   name: '午后庭院',
+  preview: '/maps/courtyard.jpg',
+  theme: 'light',
   bounds: 12,
   spawns: [
     { x: -4, z: -4 }, { x: 4, z: -4 },
@@ -90,7 +94,7 @@ export const courtyardMap = {
 };
 ```
 
-该地图直接使用内置物品，可独立添加并完成清空。`surfaces` 描述静态长方体：`position` 是中心，`size` 是 `[宽度, 高度, 深度]`；地面表层保持在 `y=0` 附近。`bounds` 是玩家活动区域的半边长，黑洞圆周保持在该范围内。地形底座可以略大于活动范围。
+该地图直接使用内置物品，可独立添加并完成清空。`surfaces` 描述静态地表：`position` 是中心，`size` 是 `[宽度, 高度, 深度]`；地面表层保持在 `y=0` 附近。`bounds` 是玩家活动区域的半边长，黑洞圆周保持在该范围内。地形底座可以略大于活动范围。
 
 在 `src/maps/index.js` 导入并注册：
 
@@ -102,21 +106,23 @@ export const MAPS = {
 };
 ```
 
-开始页自动列出所有注册地图。房主可以在准备大厅更换地图，房间广播新的地图 ID 与种子，所有客户端一起重建场景，客人需要重新准备。开局后不能再换地图。联机中各客户端需要包含该地图的同一版本。
+开始页和房主大厅的地图浏览器自动列出所有注册地图。`name` 是完整显示名称，`preview` 指向 `public/maps/` 中的场景缩略图，`theme` 使用 `light` 或 `dark`。新增地图沿用这份元数据即可。房主可以在准备大厅更换地图，房间广播新的地图 ID 与种子，所有客户端一起重建场景，客人需要重新准备。开局后不能再换地图。联机中各客户端需要包含该地图的同一版本。
 
 `spawns` 按玩家加入顺序提供出生点，建议为最多 4 位玩家分别提供位置。`sky` 设置背景颜色，`cameraOffset` 是相机相对跟随目标的 `[x, y, z]` 偏移。
 
 同一种子应生成相同的地形、物品数量、摆放顺序与 ID。不要使用 `Math.random()`、当前时间或客户端状态生成地图；`src/maps/layout.js` 提供可复用的种子随机数和布局工具。
 
+共享布局工具提供 `polygon(color, points, y)`、`path(color, points, width, y)` 和 `clearing(color, x, z, width, depth, y)`。多边形由 Three.js `ShapeGeometry` 三角化并参与地表合批；`points` 使用世界平面的 `[x, z]` 坐标，`y` 为地表高度。曲线路径使用一组连续折点生成岸线与小径。底层多边形 surface 保留 `position`、`size`，并通过归一化 `points` 描述轮廓。`nearPath` 可将物品限制在河岸或小径附近。
+
 ## 内置地图与密度
 
 - 悠闲小镇：活动半边长 56，运河与桥、果园、市场、街区公园；通常约 540–610 件物品
 - 秘境森林：活动半边长 58，弯曲溪流、林间空地、营地、池塘与古树；通常约 650–720 件物品
-- 霓虹都市：活动半边长 54，霓虹道路、夜市广场、货运轨道与高楼；通常约 540–610 件物品
+- 霓虹都市：活动半边长 54，商业街、夜市广场、货运轨道与外围高楼；通常约 540–610 件物品
 
 数量随种子变化，不使用固定 212 件的假设。HUD、结算和同步读取实际 `items.length`。上述范围是常见布局数量，具体数量由确定性生成器决定。
 
-`description` 是开始页显示的地图简介。可选的 `lighting` 提供 `skyLight`、`groundLight`、`ambientIntensity`、`sunColor`、`sunIntensity`、`exposure`；不提供时使用默认日间灯光。`cameraOffset` 仍以世界单位表示，地图变大不代表固定缩远镜头。
+可选的 `fog: [near, far]` 设置雾效距离。可选的 `lighting` 提供 `skyLight`、`groundLight`、`ambientIntensity`、`sunColor`、`sunIntensity`、`exposure`；不提供时使用默认日间灯光。`cameraOffset` 仍以世界单位表示，地图变大不代表固定缩远镜头。
 
 布局工具为每个出生点保留同样的 24 件小物品和 6 件初始可吃的中型物品，其他生成物不侵占这片空地。每片空地的初始质量相同，足以解锁本地图汽车或巨石层级；每个象限也有独立的完整成长路径。小物品会补齐外围街区，确保每个 16×16 的活动片区至少有 6 件物品。
 

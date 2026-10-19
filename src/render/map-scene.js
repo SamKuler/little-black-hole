@@ -25,18 +25,23 @@ export class MapScene {
     this.lean = new THREE.Quaternion(); this.heading = new THREE.Quaternion(); this.euler = new THREE.Euler();
     this.up = new THREE.Vector3(0, 1, 0);
     const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), .015);
-    this.material = (color, clip = true) => {
-      const key = `${color}:${clip}`;
-      if (!this.materials.has(key)) this.materials.set(key, new THREE.MeshStandardMaterial({ color, roughness: .85, clippingPlanes: clip ? [clipPlane] : [] }));
+    this.material = (color, clip = true, emission = 0) => {
+      const key = `${color}:${clip}:${emission}`;
+      if (!this.materials.has(key)) this.materials.set(key, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: emission, roughness: .85, clippingPlanes: clip ? [clipPlane] : [] }));
       return this.materials.get(key);
     };
     const ground = new THREE.Group(), boxGeometry = new THREE.BoxGeometry(1, 1, 1);
     for (const surface of map.surfaces) {
-      const mesh = new THREE.Mesh(boxGeometry, this.material(surface.color, false)); mesh.position.fromArray(surface.position); mesh.scale.fromArray(surface.size); ground.add(mesh);
+      const geometry = surface.points
+        ? new THREE.ShapeGeometry(new THREE.Shape(surface.points.map(([x, z]) => new THREE.Vector2(x, -z)))).rotateX(-Math.PI / 2)
+        : boxGeometry;
+      const mesh = new THREE.Mesh(geometry, this.material(surface.color, false, surface.emission));
+      mesh.position.fromArray(surface.position); mesh.scale.set(surface.size[0], surface.points ? 1 : surface.size[1], surface.size[2]); ground.add(mesh);
     }
     for (const part of mergeByMaterial(ground)) {
       const mesh = new THREE.Mesh(part.geometry, part.material); mesh.receiveShadow = true; this.root.add(mesh);
     }
+    ground.traverse(mesh => { if (mesh.isMesh && mesh.geometry !== boxGeometry) mesh.geometry.dispose(); });
     boxGeometry.dispose();
     const prototypes = new Map();
     for (const item of map.items) {

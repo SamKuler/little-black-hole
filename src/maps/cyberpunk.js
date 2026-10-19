@@ -4,39 +4,39 @@ const BOUNDS = 54;
 const SPAWNS = [{ x: -22, z: -22 }, { x: 22, z: 22 }, { x: 22, z: -22 }, { x: -22, z: 22 }];
 const ROADS = [-22, 0, 22];
 
-function drawCity({ box }) {
-  box('#171a31', 0, 0, 110, 110, -1.1, 2);
-  box('#283149', 0, 0, 110, 110, -.12, .22);
-  // Four neon districts: violet night market, cyan tech blocks, plum arcade, blue docks.
-  for (const [x, z, color] of [[-25, -25, '#392e51'], [25, -25, '#263f50'], [-25, 25, '#432f4c'], [25, 25, '#29384e']]) box(color, x, z, 46, 46, .025, .04);
+function drawCity({ box, surface }) {
+  box('#162137', 0, 0, 110, 110, -1.1, 2);
+  box('#26364c', 0, 0, 110, 110, -.12, .22);
+  for (const [x, z, color] of [[-25, -25, '#34405a'], [25, -25, '#2d4854'], [-25, 25, '#3c3e57'], [25, 25, '#2e4056']]) surface(color, x, z, 46, 46);
   for (const a of ROADS) {
-    box('#465168', a, 0, 8, 102, .05, .05); box('#19243a', a, 0, 5.6, 102, .085, .025);
-    box('#465168', 0, a, 102, 8, .052, .05); box('#19243a', 0, a, 102, 5.6, .087, .025);
-    for (const side of [-1, 1]) {
-      box('#55cbd1', a + side * 3.8, 0, .13, 102, .09, .035);
-      box('#cc72b5', 0, a + side * 3.8, 102, .13, .092, .035);
-    }
+    box('#536278', a, 0, 8, 102, .05, .05); box('#1c2a40', a, 0, 5.6, 102, .085, .025);
+    box('#536278', 0, a, 102, 8, .052, .05); box('#1c2a40', 0, a, 102, 5.6, .087, .025);
     for (let b = -48; b <= 48; b += 4) if (!nearLine(b, ROADS, 5)) {
-      box('#6a88ae', a, b, .18, 1.8, .11, .015); box('#6a88ae', b, a, 1.8, .18, .112, .015);
+      box('#7e91a9', a, b, .18, 1.8, .11, .015); box('#7e91a9', b, a, 1.8, .18, .112, .015);
     }
   }
-  // Paired freight rails and glowing power conduits mark the eastern district.
-  box('#202b3c', 40, 0, 9, 101, .05, .04);
-  for (const x of [37, 38, 42, 43]) box('#85a3ad', x, 0, .17, 101, .09, .03);
-  for (let z = -48; z <= 48; z += 2.7) box('#485f72', 40, z, 7, .26, .085, .02);
-  for (const z of [-22, 0, 22]) box('#535069', 40, z, 10, 5.7, .12, .045);
-  // A central digital plaza, arcade floor and loading-yard markings are recognizable landmarks.
-  for (const [x, z, color] of [[-11, -11, '#664262'], [11, 11, '#306575'], [-11, 11, '#4d436a'], [11, -11, '#37546b']]) {
-    box(color, x, z, 13, 13, .055, .045);
-    for (let offset = -5; offset <= 5; offset += 2.5) box('#758098', x + offset, z, .06, 13, .084, .015);
+  // Light is concentrated around the market, with quiet roads between districts.
+  for (const side of [-1, 1]) {
+    box('#72d3d4', side * 3.8, -11, .1, 20, .09, .025, .7);
+    box('#d894bc', 11, side * 3.8, 20, .1, .092, .025, .7);
+  }
+  box('#2c394a', 40, 0, 9, 101, .05, .04);
+  for (const x of [38, 42]) box('#748a9c', x, 0, .17, 101, .09, .03);
+  for (let z = -48; z <= 48; z += 3.5) box('#4c5d70', 40, z, 6, .2, .085, .02);
+  for (const z of ROADS) box('#526077', 40, z, 10, 5.7, .12, .045);
+  surface('#51506c', -11, -11, 14, 14);
+  surface('#3b6970', 11, 11, 14, 14);
+  for (const [x, z, color] of [[-11, -11, '#d894bc'], [11, 11, '#72d3d4']]) {
+    for (const side of [-1, 1]) box(color, x + side * 6.8, z, .12, 13, .11, .02, .7);
+    for (let offset = -5; offset <= 5; offset += 2.5) box('#68788e', x + offset, z, .06, 13, .084, .015);
   }
   for (const spawn of SPAWNS) {
-    box('#52607b', spawn.x, spawn.z, 5, 5, .13, .035);
-    box('#78d4d5', spawn.x, spawn.z, 3.1, 3.1, .155, .02);
-    box('#29384d', spawn.x, spawn.z, 2.6, 2.6, .17, .02);
+    box('#52667e', spawn.x, spawn.z, 4.8, 4.8, .13, .035);
+    box('#79a6b2', spawn.x, spawn.z, 3, 3, .155, .02);
+    box('#293b51', spawn.x, spawn.z, 2.6, 2.6, .17, .02);
   }
   for (const z of [-39, -34, 34, 39]) for (const x of [9, 14, 28, 33]) {
-    box('#dbad79', x, z, 3.5, .14, .09, .02); box('#dbad79', x - 1.7, z + 1.6, .14, 3.2, .09, .02);
+    box('#bdac85', x, z, 3.5, .14, .09, .02); box('#bdac85', x - 1.7, z + 1.6, .14, 3.2, .09, .02);
   }
 }
 
@@ -46,20 +46,22 @@ function create(seed) {
   drawCity(layout);
   layout.starters(['neonCrate', 'neonCrate', 'stone'], ['terminal', 'terminal']);
   const offRoad = (x, z, radius) => !nearLine(x, ROADS, radius + 4.1) && !nearLine(z, ROADS, radius + 4.1) && Math.abs(x - 40) > radius + 4.6;
-  scatter(integer(36, 44), ['cyberShop', 'cyberShop', 'cyberTower'], { valid: offRoad, colors: { cyberShop: ['#3d4d67', '#584363'], cyberTower: ['#394a64', '#504369'] } });
+  scatter(integer(8, 12), ['cyberTower'], { valid: (x, z, radius) => offRoad(x, z, radius) && (Math.max(Math.abs(x), Math.abs(z)) > 26 || layout.random() < .2), colors: { cyberTower: ['#41536c', '#505571'] } });
+  scatter(integer(24, 28), ['cyberShop'], { valid: (x, z, radius) => offRoad(x, z, radius) && (Math.max(Math.abs(x), Math.abs(z)) < 32 || layout.random() < .2), colors: { cyberShop: ['#576078', '#70576b'] } });
   scatter(integer(40, 48), ['hovercar'], {
-    colors: { hovercar: ['#62c5cf', '#d986bd', '#ae9bdd'] },
+    colors: { hovercar: ['#72b7c1', '#b28aa9', '#a89ac7'] },
     position: () => { const road = layout.pick(ROADS), at = range(-44, 44); return layout.random() < .5 ? { x: road + 1.5, z: at } : { x: at, z: road + 1.5 }; },
   });
-  scatter(integer(130, 154), ['terminal', 'neonSign', 'neonSign'], {});
+  scatter(integer(34, 42), ['neonSign'], { valid: (x, z) => Math.max(Math.abs(x), Math.abs(z)) < 31 });
+  scatter(integer(96, 112), ['terminal', 'terminal', 'neonCrate'], { valid: (x, z) => nearLine(x, ROADS, 6) || nearLine(z, ROADS, 6) });
   scatter(integer(210, 242), ['neonCrate', 'neonCrate', 'stone'], {});
   layout.fillGaps(['neonCrate', 'stone']);
   return { placements: layout.placements, surfaces: layout.surfaces };
 }
 
 export const cyberpunkMap = {
-  id: 'cyberpunk', name: '霓虹都市', description: '穿梭夜市与能量街区，把霓虹招牌和摩天楼收入囊中', bounds: BOUNDS,
-  spawns: SPAWNS, sky: '#28334f', cameraOffset: [32, 44, 38],
-  lighting: { skyLight: '#acb6ff', groundLight: '#54708f', ambientIntensity: 2.1, sunColor: '#c5d5ff', sunIntensity: 1.8, exposure: 1.08 },
+  id: 'cyberpunk', name: '霓虹都市', bounds: BOUNDS, theme: 'dark', preview: '/maps/cyberpunk.jpg',
+  spawns: SPAWNS, sky: '#18263d', cameraOffset: [32, 44, 38], fog: [90, 170],
+  lighting: { skyLight: '#c0d9ed', groundLight: '#718299', ambientIntensity: 1.7, sunColor: '#c9dff7', sunIntensity: 2, exposure: 1.04 },
   create,
 };

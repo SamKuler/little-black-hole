@@ -35,18 +35,13 @@ test('home and lobby keep headings outside their scrollable content', () => {
   assert.ok(elements.some(element => element.parent === byId('intro') && hasClass(element, 'mode-picker')));
 });
 
-test('both compact map groups retain accessible names without descriptive clutter', () => {
+test('home and host lobby provide matching map-browser mount points', () => {
   for (const id of ['map-picker', 'room-map-picker']) {
     const picker = byId(id);
-    assert.equal(picker?.attrs.role, 'radiogroup');
-    assert.ok(byId(picker.attrs['aria-labelledby']), `${id} has a visible group label`);
     assert.ok(hasClass(picker.parent, 'map-selection'));
+    assert.ok(elements.some(element => element.parent === picker.parent && hasClass(element, 'map-label')));
   }
   assert.ok(byId('room-map-name'), 'guests have a read-only map name');
-  assert.ok(!elements.some(element => element.tag === 'select'), 'no native dropdowns remain');
-  for (const id of ['map-description', 'map-details', 'map-host-note', 'room-map-description', 'room-map-details', 'room-map-note', 'mode-note', 'lobby-note']) {
-    assert.equal(byId(id), undefined, `${id} is removed rather than hidden`);
-  }
 });
 
 test('menu integration does not duplicate existing controls or IDs', () => {
@@ -57,4 +52,14 @@ test('menu integration does not duplicate existing controls or IDs', () => {
   }
   assert.ok(within(byId('nickname'), byId('network-form')));
   assert.ok(within(byId('create-room'), byId('network-form')));
+});
+
+test('toast announcements stay mounted independently of the visual notification', () => {
+  const status = byId('toast-status'), visual = byId('toast');
+  assert.equal(status.attrs.role, 'status');
+  assert.equal(status.attrs['aria-live'], 'polite');
+  assert.equal(status.attrs['aria-atomic'], 'true');
+  assert.ok(!('hidden' in status.attrs));
+  assert.ok(!within(status, byId('intro')) && !within(status, byId('room-panel')));
+  assert.equal(visual.attrs['aria-hidden'], 'true');
 });
