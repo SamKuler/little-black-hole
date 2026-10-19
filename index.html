@@ -16,33 +16,41 @@
         <div class="top-actions"><span class="mode"><i></i><span id="mode-label">自由漫游</span></span><button id="sound" class="icon-button" aria-label="开启音效" title="开启音效"></button><button id="pause" class="icon-button" aria-label="暂停游戏" title="暂停游戏" disabled hidden></button></div>
       </header>
       <section id="intro" class="intro" aria-label="游戏模式与房间">
+        <span class="intro-dot" aria-hidden="true"></span>
+        <h1>小小黑洞</h1>
         <div class="mode-picker" role="group" aria-label="选择游戏模式"><button data-mode="free" aria-pressed="true">自由漫游</button><button data-mode="timed" aria-pressed="false">限时挑战</button><button data-mode="online" aria-pressed="false">好友联机</button></div>
-        <div id="map-choice" class="map-card" hidden>
-          <label class="map-choice" for="map-select">选择地图<select id="map-select" aria-describedby="map-description map-details"></select></label>
-          <p id="map-description"></p><p id="map-details" class="map-details" aria-live="polite"></p>
-          <p id="map-host-note" class="map-host-note" hidden>创建房间时使用这张地图；加入房间后以房主选择为准。</p>
+        <div class="menu-content">
+          <div id="map-choice" class="map-selection" hidden>
+            <label class="map-choice" for="map-select">选择地图<select id="map-select" aria-describedby="map-description map-details"></select></label>
+            <p id="map-description"></p><p id="map-details" class="map-details" aria-live="polite"></p>
+            <p id="map-host-note" class="map-host-note" hidden>创建房间时使用这张地图；加入房间后以房主选择为准。</p>
+          </div>
+          <button id="start" class="primary">开始吞噬 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+          <span id="mode-note" class="intro-note">无时间限制，清空地图后结算。</span>
+          <section id="network-form" hidden aria-label="创建或加入好友房间">
+            <label for="nickname">你的昵称</label><input id="nickname" maxlength="12" placeholder="输入昵称" autocomplete="nickname" />
+            <div class="room-mode-picker" role="group" aria-label="好友房玩法"><button data-room-mode="race" aria-pressed="true">120 秒竞赛</button><button data-room-mode="coop" aria-pressed="false">合作清空</button></div>
+            <button id="create-room" class="primary">创建房间 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+            <div class="join-row"><input id="room-code" maxlength="8" placeholder="8 位房间号" aria-label="房间号" autocapitalize="characters" autocomplete="off" spellcheck="false" /><button id="join-room" class="secondary">加入</button></div>
+            <p id="network-status" role="status" aria-live="polite">2–4 人，分享房间链接就能一起玩。</p>
+          </section>
         </div>
-        <button id="start" class="primary">开始吞噬 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
-        <span id="mode-note" class="intro-note">无时间限制，清空地图后结算。</span>
-        <section id="network-form" hidden aria-label="创建或加入好友房间">
-          <label for="nickname">你的昵称</label><input id="nickname" maxlength="12" placeholder="输入昵称" autocomplete="nickname" />
-          <div class="room-mode-picker" role="group" aria-label="好友房玩法"><button data-room-mode="race" aria-pressed="true">120 秒竞赛</button><button data-room-mode="coop" aria-pressed="false">合作清空</button></div>
-          <button id="create-room" class="primary">创建好友房</button>
-          <div class="join-row"><input id="room-code" maxlength="8" placeholder="8 位房间号" aria-label="房间号" autocapitalize="characters" autocomplete="off" spellcheck="false" /><button id="join-room" class="secondary">加入</button></div>
-          <p id="network-status" role="status" aria-live="polite">2–4 人，分享房间链接就能一起玩。</p>
-        </section>
       </section>
       <section id="room-panel" class="room-panel" hidden aria-label="好友房间">
+        <span class="intro-dot" aria-hidden="true"></span>
+        <h1>小小黑洞</h1>
         <div class="room-panel-heading"><h2>好友房间</h2><button id="leave-lobby" class="text-button">离开</button></div>
-        <p id="room-description"></p><div class="invite-row"><strong id="invite-code"></strong><button id="copy-invite" class="secondary">复制邀请链接</button></div>
-        <input id="invite-link" readonly aria-label="邀请链接" hidden />
-        <div class="map-card room-map-card">
-          <label class="map-choice" for="room-map-select">本轮地图<select id="room-map-select" aria-describedby="room-map-description room-map-details room-map-note"></select></label>
-          <p id="room-map-description"></p><p id="room-map-details" class="map-details" aria-live="polite"></p>
-          <p id="room-map-note" class="map-host-note"></p>
+        <div class="menu-content">
+          <p id="room-description"></p><div class="invite-row"><strong id="invite-code"></strong><button id="copy-invite" class="secondary">复制邀请链接</button></div>
+          <input id="invite-link" readonly aria-label="邀请链接" hidden />
+          <div class="map-selection room-map-selection">
+            <label class="map-choice" for="room-map-select">本轮地图<select id="room-map-select" aria-describedby="room-map-description room-map-details room-map-note"></select></label>
+            <p id="room-map-description"></p><p id="room-map-details" class="map-details" aria-live="polite"></p>
+            <p id="room-map-note" class="map-host-note"></p>
+          </div>
+          <ol id="lobby-players" class="player-list"></ol>
+          <button id="room-start" class="primary" disabled>等待朋友加入</button><p id="lobby-note" class="room-note">房主开启比赛，所有人同步出发。</p>
         </div>
-        <ol id="lobby-players" class="player-list"></ol>
-        <button id="room-start" class="primary" disabled>等待朋友加入</button><p id="lobby-note" class="room-note">房主开启比赛，所有人同步出发。</p>
       </section>
       <aside id="leaderboard" class="leaderboard" aria-label="实时排名" hidden><h2>吞噬排名</h2><ol id="ranking-list" class="player-list"></ol></aside>
       <div id="paused-banner" class="paused-banner" role="status" hidden></div>

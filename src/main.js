@@ -230,7 +230,6 @@ function singleGame(mode, started = false) {
 function selectMode(mode) {
   selectedMode = mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
-  $('#intro').classList.toggle('network', mode === 'online');
   $('#network-form').hidden = mode !== 'online'; $('#start').hidden = mode === 'online'; $('#mode-note').hidden = mode === 'online';
   $('#map-host-note').hidden = mode !== 'online';
   $('#mode-note').textContent = mode === 'timed' ? '限时 120 秒，按吞噬得分结算。' : '无时间限制，清空地图后结算。';
