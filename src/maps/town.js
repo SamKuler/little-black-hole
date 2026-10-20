@@ -31,15 +31,15 @@ function drawTown(layout) {
     box('#d3b58b', 41, z, 10, 6.1, .14, .08);
     for (let x = 37; x <= 45; x += 1) box('#b29273', x, z, .07, 6.1, .19, .015);
   }
-  // The park, orchard, market court, and station forecourt are distinct destinations.
-  surface('#8eb79b', -12, 12, 15, 15);
+  // Destination paving sits above district paving, below its decorative markings.
+  surface('#8eb79b', -12, 12, 15, 15, .045);
   box('#d9d8bb', -12, 12, 6.4, 8.4, .06, .05);
   box('#78acb4', -12, 12, 4.8, 6.8, .09, .03);
-  surface('#c4bc9e', -37, -35, 16, 18);
+  surface('#c4bc9e', -37, -35, 16, 18, .045);
   for (let x = -43; x <= -31; x += 4) box('#91b58b', x, -35, 2.3, 17, .055, .035);
-  surface('#e1c7a9', 12, -12, 16, 15);
+  surface('#e1c7a9', 12, -12, 16, 15, .045);
   for (let x = 7; x <= 17; x += 2.5) box('#c9b497', x, -12, .07, 15, .06, .02);
-  surface('#d4d9ce', 12, 12, 16, 15);
+  surface('#d4d9ce', 12, 12, 16, 15, .045);
   for (const spawn of SPAWNS) {
     box('#d9dfcb', spawn.x, spawn.z, 4.5, 4.5, .145, .035);
     box('#ece6d3', spawn.x, spawn.z, 2.6, 2.6, .17, .025);

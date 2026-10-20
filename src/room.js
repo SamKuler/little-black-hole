@@ -2,8 +2,8 @@ import { Match, cleanName, MAX_PLAYERS } from './match.js';
 import { MAPS } from './maps/index.js';
 
 // Map layouts are rebuilt locally from snapshots. Keep clients with older
-// layouts/readiness messages out of these rooms to avoid simulation drift.
-const PREFIX = 'little-black-hole-v3-';
+// layouts/rigid-body pose messages out of these rooms to avoid simulation drift.
+const PREFIX = 'little-black-hole-v4-';
 export const validRoomCode = code => /^[A-Z2-9]{8}$/.test(code);
 export function newRoomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

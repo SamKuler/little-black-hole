@@ -1,6 +1,6 @@
-import { START_RADIUS, radiusForMass, canSwallow, clampPosition } from './rules.js';
+import { START_RADIUS, radiusForMass, clampPosition } from './rules.js';
 import { createMap, DEFAULT_MAP } from './maps/index.js';
-import { fallDuration } from './fall.js';
+import { HolePhysics, PHYSICS_STEP, MAX_CATCHUP } from './physics/world.js';
 
 export const ROUND_SECONDS = 120;
 export const MAX_PLAYERS = 4;
@@ -20,8 +20,10 @@ export class Match {
     this.map = createMap(mapId, seed);
     this.items = this.map.items;
     this.claims = [];
+    this.physics = new HolePhysics(this.items);
+    this.physicsAccumulator = 0;
+    this.movementAccumulator = 0;
     this.eaten = 0;
-    this.turn = 0;
   }
   addPlayer(id, name) {
     if (this.phase !== 'lobby' || this.players.length >= MAX_PLAYERS || this.players.some(player => player.id === id)) return false;
@@ -63,52 +65,49 @@ export class Match {
     if (this.phase !== 'playing' || !Number.isFinite(dt) || dt <= 0) return;
     const timed = this.mode === 'timed' || this.mode === 'race';
     const next = Math.min(this.elapsed + dt, timed ? ROUND_SECONDS : Infinity);
-    const movementTime = Math.min(next - this.elapsed, .1);
+    this.movementAccumulator = Math.min(this.movementAccumulator + Math.min(next - this.elapsed, .1), MAX_CATCHUP);
+    this.physicsAccumulator = Math.min(this.physicsAccumulator + next - this.elapsed, MAX_CATCHUP);
     this.elapsed = next;
     for (const player of this.players) {
       if (this.elapsed - player.inputAt > .5) player.input = { x: 0, z: 0 };
-      const speed = (6.5 + player.radius * .4) * movementTime;
-      player.x = clampPosition(player.x + player.input.x * speed, player.radius, this.map.bounds);
-      player.z = clampPosition(player.z + player.input.z * speed, player.radius, this.map.bounds);
     }
-    for (const claim of this.claims) {
-      if (claim.done || this.elapsed - claim.at < claim.duration) continue;
-      claim.done = true;
-      const player = this.players.find(player => player.id === claim.owner);
-      player.mass += this.items[claim.id].mass;
-      player.radius = radiusForMass(player.mass);
-      player.eaten++; this.eaten++;
+    while (this.physicsAccumulator + 1e-10 >= PHYSICS_STEP) {
+      const movementTime = Math.min(PHYSICS_STEP, this.movementAccumulator);
+      this.movementAccumulator -= movementTime;
+      for (const player of this.players) {
+        const speed = (6.5 + player.radius * .4) * movementTime;
+        player.x = clampPosition(player.x + player.input.x * speed, player.radius, this.map.bounds);
+        player.z = clampPosition(player.z + player.input.z * speed, player.radius, this.map.bounds);
+      }
+      // The host alone integrates rigid bodies and awards completed crossings.
+      for (const completed of this.physics.step(this.players)) {
+        const player = this.players.find(player => player.id === completed.owner);
+        if (!player) continue;
+        player.mass += this.items[completed.id].mass;
+        player.radius = radiusForMass(player.mass);
+        player.eaten++; this.eaten++;
+      }
+      if (this.mode === 'coop') {
+        const teamRadius = radiusForMass(this.players.reduce((mass, player) => mass + player.mass, 0));
+        for (const player of this.players) player.radius = teamRadius;
+      }
+      this.physicsAccumulator -= PHYSICS_STEP;
     }
-    if (this.mode === 'coop') {
-      const teamRadius = radiusForMass(this.players.reduce((mass, player) => mass + player.mass, 0));
-      for (const player of this.players) player.radius = teamRadius;
-    }
+    this.claims = this.physics.snapshot();
     if ((timed && this.elapsed >= ROUND_SECONDS) || this.eaten === this.items.length) {
       this.phase = 'finished';
       for (const player of this.players) player.input = { x: 0, z: 0 };
       return;
     }
-    const claimed = new Set(this.claims.map(claim => claim.id));
-    // Rotate the tie-break order so equal-distance captures do not always favor the host.
-    const order = this.players.map((_, i) => this.players[(i + this.turn) % this.players.length]);
-    for (let id = 0; id < this.items.length; id++) {
-      if (claimed.has(id)) continue;
-      const item = this.items[id];
-      const candidates = order.filter(player => player.online && canSwallow(player, item));
-      candidates.sort((a, b) => Math.hypot(a.x - item.x, a.z - item.z) - Math.hypot(b.x - item.x, b.z - item.z));
-      if (candidates.length) this.claims.push({ id, owner: candidates[0].id, at: this.elapsed, duration: fallDuration(item), done: false, x: candidates[0].x, z: candidates[0].z });
-    }
-    this.turn++;
   }
   snapshot() {
     return {
       round: this.round, mode: this.mode, mapId: this.mapId, seed: this.seed, phase: this.phase, elapsed: this.elapsed,
       eaten: this.eaten, total: this.items.length,
       players: this.players.map(({ input, inputAt, ...player }) => ({ ...player, vx: this.phase === 'playing' ? input.x * (6.5 + player.radius * .4) : 0, vz: this.phase === 'playing' ? input.z * (6.5 + player.radius * .4) : 0 })),
-      // Completed objects only need an ID to disappear on clients. Keep their
-      // animation/owner history authoritative here, rather than retransmitting
-      // it every tick across hundreds of objects on the larger maps.
-      claims: this.claims.map(claim => claim.done ? { id: claim.id, done: true } : { ...claim }),
+      // Untouched props are reconstructed from the map seed; only touched
+      // poses and completed IDs are sent. Never share mutable quaternion arrays.
+      claims: this.claims.map(claim => claim.done && !claim.pose ? { id: claim.id, done: true } : { ...claim, ...(claim.pose && { pose: { ...claim.pose, q: [...claim.pose.q] } }) }),
     };
   }
 }

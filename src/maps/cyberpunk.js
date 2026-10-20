@@ -24,8 +24,9 @@ function drawCity({ box, surface }) {
   for (const x of [38, 42]) box('#748a9c', x, 0, .17, 101, .09, .03);
   for (let z = -48; z <= 48; z += 3.5) box('#4c5d70', 40, z, 6, .2, .085, .02);
   for (const z of ROADS) box('#526077', 40, z, 10, 5.7, .12, .045);
-  surface('#51506c', -11, -11, 14, 14);
-  surface('#3b6970', 11, 11, 14, 14);
+  // Market paving must not share the underlying districts' top-face height.
+  surface('#51506c', -11, -11, 14, 14, .045);
+  surface('#3b6970', 11, 11, 14, 14, .045);
   for (const [x, z, color] of [[-11, -11, '#d894bc'], [11, 11, '#72d3d4']]) {
     for (const side of [-1, 1]) box(color, x + side * 6.8, z, .12, 13, .11, .02, .7);
     for (let offset = -5; offset <= 5; offset += 2.5) box('#68788e', x + offset, z, .06, 13, .084, .015);

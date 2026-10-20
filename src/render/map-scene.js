@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createModel } from '../items/models.js';
+import { ApertureMask } from './apertures.js';
+import { applyAbyssFade } from './abyss.js';
 
 function mergeByMaterial(root) {
   root.updateMatrixWorld(true);
@@ -24,10 +26,17 @@ export class MapScene {
     this.transform = new THREE.Object3D();
     this.lean = new THREE.Quaternion(); this.heading = new THREE.Quaternion(); this.euler = new THREE.Euler();
     this.up = new THREE.Vector3(0, 1, 0);
-    const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), .015);
-    this.material = (color, clip = true, emission = 0) => {
-      const key = `${color}:${clip}:${emission}`;
-      if (!this.materials.has(key)) this.materials.set(key, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: emission, roughness: .85, clippingPlanes: clip ? [clipPlane] : [] }));
+    this.apertures = new ApertureMask();
+    this.depthMaterial = this.apertures.apply(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
+    this.distanceMaterial = this.apertures.apply(new THREE.MeshDistanceMaterial());
+    this.material = (color, item = true, emission = 0) => {
+      const key = `${color}:${item}:${emission}`;
+      if (!this.materials.has(key)) {
+        const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: emission, roughness: .85 });
+        if (item) applyAbyssFade(material);
+        else this.apertures.apply(material);
+        this.materials.set(key, material);
+      }
       return this.materials.get(key);
     };
     const ground = new THREE.Group(), boxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -39,7 +48,9 @@ export class MapScene {
       mesh.position.fromArray(surface.position); mesh.scale.set(surface.size[0], surface.points ? 1 : surface.size[1], surface.size[2]); ground.add(mesh);
     }
     for (const part of mergeByMaterial(ground)) {
-      const mesh = new THREE.Mesh(part.geometry, part.material); mesh.receiveShadow = true; this.root.add(mesh);
+      const mesh = new THREE.Mesh(part.geometry, part.material); mesh.receiveShadow = true;
+      mesh.customDepthMaterial = this.depthMaterial; mesh.customDistanceMaterial = this.distanceMaterial;
+      this.root.add(mesh);
     }
     ground.traverse(mesh => { if (mesh.isMesh && mesh.geometry !== boxGeometry) mesh.geometry.dispose(); });
     boxGeometry.dispose();
@@ -64,10 +75,14 @@ export class MapScene {
     }
     scene.add(this.root);
   }
+  setHoles(holes) { this.apertures.setHoles(holes); }
   pose(item, pose) {
     this.transform.position.set(pose.x, pose.y, pose.z);
-    this.lean.setFromEuler(this.euler.set(pose.rx, 0, pose.rz)); this.heading.setFromAxisAngle(this.up, item.rotation);
-    this.transform.quaternion.copy(this.lean).multiply(this.heading);
+    if (pose.q) this.transform.quaternion.fromArray(pose.q);
+    else {
+      this.lean.setFromEuler(this.euler.set(pose.rx ?? 0, 0, pose.rz ?? 0)); this.heading.setFromAxisAngle(this.up, item.rotation);
+      this.transform.quaternion.copy(this.lean).multiply(this.heading);
+    }
     this.transform.scale.setScalar(1); this.transform.updateMatrix();
     for (const { batch, index } of this.parts.get(item.id)) { batch.setMatrixAt(index, this.transform.matrix); this.dirty.add(batch); }
   }
@@ -79,5 +94,6 @@ export class MapScene {
   dispose() {
     this.scene.remove(this.root); this.root.traverse(mesh => { if (mesh.isMesh) { mesh.geometry.dispose(); if (mesh.isInstancedMesh) mesh.dispose(); } });
     for (const material of this.materials.values()) material.dispose();
+    this.depthMaterial.dispose(); this.distanceMaterial.dispose();
   }
 }

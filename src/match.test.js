@@ -56,16 +56,17 @@ test('snapshots cannot mutate authoritative scores or claim state', () => {
 test('large-map late-round snapshots compact completed food and retain active animations', () => {
   for (const mapId of Object.keys(MAPS)) {
     const match = new Match('coop', 42, mapId); match.addPlayer('host', '房主'); match.start();
-    match.claims = match.items.map(item => ({ id: item.id, owner: 'host', at: 12, duration: 1, x: item.x, z: item.z, done: true }));
-    match.claims.at(-1).done = false;
+    match.claims = match.items.map(item => ({ id: item.id, done: true }));
+    const item = match.items.at(-1);
+    match.claims[match.claims.length - 1] = { id: item.id, done: false, owner: 'host', pose: { x: item.x + .1, y: -.4, z: item.z, q: [0, 0, Math.sin(.2), Math.cos(.2)] } };
     const snapshot = match.snapshot();
     assert.equal(snapshot.claims.length, match.items.length);
     assert.deepEqual(snapshot.claims[0], { id: 0, done: true });
     assert.deepEqual(snapshot.claims.at(-1), match.claims.at(-1));
     assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) < 24000, `${mapId} late-round network payload stays bounded`);
-    snapshot.claims[0].id = -1; snapshot.claims.at(-1).at = 999;
-    assert.equal(match.claims[0].id, 0); assert.equal(match.claims.at(-1).at, 12);
-    assert.equal(match.claims[0].owner, 'host');
+    snapshot.claims[0].id = -1; snapshot.claims.at(-1).pose.q[0] = 999;
+    assert.equal(match.claims[0].id, 0); assert.equal(match.claims.at(-1).pose.q[0], 0);
+    assert.equal(match.claims.at(-1).owner, 'host');
   }
 });
 
@@ -92,4 +93,16 @@ test('only the host can pause the whole match, freezing clock and pending food',
   const snapshot = match.snapshot(); match.advance(10); assert.deepEqual(match.snapshot(), snapshot);
   assert.equal(match.setPaused('guest', false), false); assert.equal(match.setPaused('host', false), true); match.advance(2);
   assert.ok(match.eaten > 0); assert.equal(match.elapsed, 2.05);
+});
+
+test('fixed-step movement keeps fractional time across render and network command frequencies', () => {
+  for (const frequency of [20, 60, 100, 120, 144, 240]) {
+    const match = started(), player = match.players[0], x = player.x;
+    // Isolate time integration from food-driven growth along the travel path.
+    match.physics.step = () => [];
+    for (let i = 0; i < frequency; i++) {
+      match.setInput('host', { x: 1, z: 0 }); match.advance(1 / frequency);
+    }
+    assert.ok(Math.abs(player.x - x - 6.98) < 1e-8, `${frequency} Hz movement lost fractional time`);
+  }
 });

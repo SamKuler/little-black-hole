@@ -16,7 +16,8 @@ export function createLayout(bounds, seed, spawns) {
     const relief = y >= 0 ? 1 / 3 : 1;
     surfaces.push({ color, position: [x, y * relief, z], size: [width, height * relief, depth], emission });
   };
-  const surface = (color, x, z, width, depth) => box(color, x, z, width, depth);
+  // Overlays need a distinct height from their district base to avoid depth ties.
+  const surface = (color, x, z, width, depth, y = .025) => box(color, x, z, width, depth, y);
   const polygon = (color, points, y = .025) => {
     const xs = points.map(point => point[0]), zs = points.map(point => point[1]);
     const width = Math.max(...xs) - Math.min(...xs), depth = Math.max(...zs) - Math.min(...zs);
