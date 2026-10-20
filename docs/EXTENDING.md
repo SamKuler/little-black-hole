@@ -116,6 +116,8 @@ export const MAPS = {
 
 共享布局工具提供 `polygon(color, points, y)`、`path(color, points, width, y)` 和 `clearing(color, x, z, width, depth, y)`。多边形由 Three.js `ShapeGeometry` 三角化并参与地表合批；`points` 使用世界平面的 `[x, z]` 坐标，`y` 为地表高度。曲线路径使用一组连续折点生成岸线与小径。底层多边形 surface 保留 `position`、`size`，并通过归一化 `points` 描述轮廓。`nearPath` 可将物品限制在河岸或小径附近。
 
+矩形铺装使用 `surface(color, x, z, width, depth, y = .025)`，与 `box` 一样会将非负中心高度和厚度压至三分之一，因此默认顶面为 `.015`。叠在街区铺装上的公园、广场等使用 `y=.045`，顶面约 `.021667`，仍低于条纹和道路。不同材质的地面不要在相同高度重叠，否则会产生深度冲突和闪烁；`src/render/ground-layers.test.js` 会检查合批后的实际三角形，而不只是布局参数。
+
 ## 内置地图与密度
 
 - 悠闲小镇：活动半边长 56，运河与桥、果园、市场、街区公园；通常约 540–610 件物品
