@@ -90,3 +90,24 @@ test('four openings around a footprint leave support on a solid island inside a 
   const contacts = groundContacts(vertices, edges, holes, faces);
   assert.ok(contacts.some(contact => contact.normal.y === 1 && !inOpening(contact.point.x, contact.point.z, holes)));
 });
+
+test('compound parts use the whole body side rather than opposing top and underside normals', () => {
+  const { vertices, edges, faces } = box([.2, .2, .2], [0, -.35, 0]);
+  const isolated = groundContacts(vertices, edges, [], faces);
+  assert.ok(isolated.some(contact => contact.normal.y === -1));
+  const compound = groundContacts(vertices, edges, [], faces, .7);
+  assert.ok(compound.length > 0);
+  assert.ok(compound.every(contact => contact.normal.y === 1));
+});
+
+test('slab-clipped wall samples take priority over buried bottom supports', () => {
+  const { vertices, edges, faces } = box([.305, .315, .315], [0, -.1, 0]);
+  const mouth = { id: 'moving', x: .35, z: 0, radius: .65, vx: 7, vz: 0 };
+  const contacts = groundContacts(vertices, edges, [mouth], faces);
+  const walls = contacts.filter(contact => contact.normal.y === 0);
+  assert.ok(walls.length > 0);
+  assert.ok(walls.some(contact => contact.depth > .04), 'side contact is not discarded for being deeper than the top-plane distance');
+  assert.ok(walls.every(contact => contact.point.y >= -GROUND_THICKNESS && contact.point.y <= .004));
+  assert.ok(walls.every(contact => contact.wall === mouth));
+  assert.ok(contacts.every(contact => contact.normal.y !== 1 || contact.point.y >= -GROUND_THICKNESS));
+});

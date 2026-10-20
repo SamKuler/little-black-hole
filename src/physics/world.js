@@ -4,6 +4,11 @@ import { GROUND_THICKNESS, installPerforatedGround, inOpening } from './ground.j
 
 export const PHYSICS_STEP = 1 / 60;
 export const MAX_CATCHUP = .5;
+// Bound wall travel during contact generation. Ordinary movement usually needs
+// one step; fast motion is interpolated rather than materializing terrain
+// through an entire narrow collider in one frame.
+const MAX_RIM_TRAVEL = GROUND_THICKNESS / 2;
+const MAX_RIM_STEPS = 16;
 
 // Props interact with the ground/rim, not with one another. This deliberately
 // avoids an O(n²) broadphase and unstable piles in the densely populated maps.
@@ -12,7 +17,10 @@ class GroundBroadphase extends Broadphase {
     const ground = world.bodies[0];
     for (let i = 1; i < world.bodies.length; i++) {
       const body = world.bodies[i];
-      if (body.sleepState !== Body.SLEEPING) { pairsA.push(ground); pairsB.push(body); }
+      if (body.sleepState !== Body.SLEEPING) {
+        if (body.aabbNeedsUpdate) body.updateAABB();
+        pairsA.push(ground); pairsB.push(body);
+      }
     }
   }
 }
@@ -61,20 +69,25 @@ export class HolePhysics {
   }
   step(players) {
     const previous = this.holes;
-    this.holes = players.filter(player => player.online).map(({ id, x, z, radius }) => ({ id, x, z, radius }));
-    const changed = this.holes.length !== previous.length || this.holes.some((hole, i) => !previous[i] || hole.id !== previous[i].id || hole.x !== previous[i].x || hole.z !== previous[i].z || hole.radius !== previous[i].radius);
-    // Unaffected props never enter the solver. A sleeping moved prop is woken
-    // when a mouth changes nearby, including when its support returns.
-    for (const item of this.items) {
-      const existing = this.records.get(item.id);
-      if (existing?.done) continue;
-      const x = existing?.body.position.x ?? item.x, z = existing?.body.position.z ?? item.z;
-      const reach = existing?.body.boundingRadius ?? item.radius;
-      const nearby = this.holes.some(hole => Math.hypot(x - hole.x, z - hole.z) < hole.radius + reach);
-      if (!existing && nearby) this.activate(item.id);
-      else if (existing && changed && (nearby || previous.some(hole => Math.hypot(x - hole.x, z - hole.z) < hole.radius + reach))) existing.body.wakeUp();
+    const targets = players.filter(player => player.online).map(({ id, x, z, radius }) => {
+      const before = previous.find(hole => hole.id === id);
+      const travel = before ? Math.hypot(x - before.x, z - before.z) + Math.abs(radius - before.radius) : 0;
+      // Discontinuous position resets are not a physically moving wall. Let
+      // consistent slab contacts recover overlap without a teleport impulse.
+      return { id, x, z, radius, before: travel <= MAX_RIM_TRAVEL * MAX_RIM_STEPS ? before : null, travel };
+    });
+    const steps = Math.max(1, ...targets.map(hole => hole.before ? Math.ceil(hole.travel / MAX_RIM_TRAVEL) : 1));
+    for (let step = 1; step <= steps; step++) {
+      this.holes = targets.map(({ id, x, z, radius, before }) => ({
+        id, x: before ? before.x + (x - before.x) * step / steps : x,
+        z: before ? before.z + (z - before.z) * step / steps : z,
+        radius: before ? before.radius + (radius - before.radius) * step / steps : radius,
+        vx: before ? (x - before.x) / PHYSICS_STEP : 0,
+        vz: before ? (z - before.z) / PHYSICS_STEP : 0,
+        vr: before ? (radius - before.radius) / PHYSICS_STEP : 0,
+      }));
+      this.advanceBodies(previous, PHYSICS_STEP / steps);
     }
-    this.world.step(PHYSICS_STEP);
     const completed = [];
     for (const record of this.records.values()) {
       if (record.done) continue;
@@ -102,6 +115,21 @@ export class HolePhysics {
     }
     this.turn++;
     return completed;
+  }
+  advanceBodies(previous, dt) {
+    const changed = this.holes.length !== previous.length || this.holes.some((hole, i) => !previous[i] || hole.id !== previous[i].id || hole.x !== previous[i].x || hole.z !== previous[i].z || hole.radius !== previous[i].radius);
+    // Unaffected props never enter the solver. A sleeping moved prop is woken
+    // when a mouth changes nearby, including when its support returns.
+    for (const item of this.items) {
+      const existing = this.records.get(item.id);
+      if (existing?.done) continue;
+      const x = existing?.body.position.x ?? item.x, z = existing?.body.position.z ?? item.z;
+      const reach = existing?.body.boundingRadius ?? item.radius;
+      const nearby = this.holes.some(hole => Math.hypot(x - hole.x, z - hole.z) < hole.radius + reach);
+      if (!existing && nearby) this.activate(item.id);
+      else if (existing && changed && (nearby || previous.some(hole => Math.hypot(x - hole.x, z - hole.z) < hole.radius + reach))) existing.body.wakeUp();
+    }
+    this.world.step(dt);
   }
   snapshot() {
     return [...this.records.values()].map(record => record.done && this.world.time - record.completedAt > .25

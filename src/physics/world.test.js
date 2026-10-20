@@ -56,20 +56,143 @@ test('an oversized building bridges the hole without collapsing or scoring', () 
   assert.equal(record.owner, null);
 });
 
-test('a moving mouth can restore support without attaching or teleporting a falling prop', () => {
-  const sim = simulation('neonCrate'); let x = 0, maxStep = 0, previous;
-  for (let i = 0; i < Math.round(2.5 / PHYSICS_STEP); i++) {
-    if (i > Math.round(.0833 / PHYSICS_STEP) && i < Math.round(.3333 / PHYSICS_STEP)) x += 7 * PHYSICS_STEP;
-    assert.deepEqual(sim.step([hole(x)]), []);
-    const record = sim.records.get(0);
-    if (previous) maxStep = Math.max(maxStep, Math.hypot(record.pose.x - previous.x, record.pose.y - previous.y, record.pose.z - previous.z));
-    previous = { ...record.pose };
+function inserted(type, depth, radius, rotation = 0) {
+  const sim = simulation(type); sim.items[0].rotation = rotation;
+  const record = sim.activate(0), mouth = hole(0, radius);
+  record.body.position.y -= depth; record.body.aabbNeedsUpdate = true;
+  sim.step([mouth]);
+  return { sim, record, mouth };
+}
+
+test('an advancing rim pushes a half-inserted prop only after contact and creates torque', () => {
+  const { sim, record, mouth } = inserted('neonCrate', .4, .65);
+  for (let i = 1; i <= 2; i++) {
+    mouth.x = i * 7 * PHYSICS_STEP; sim.step([mouth]);
+    assert.equal(record.pose.x, 0, 'moving a nearby opening does not attract the body');
   }
-  const record = sim.records.get(0);
-  assert.ok(maxStep < .18);
-  assert.ok(Math.abs(record.pose.x - x) > 1, 'body does not follow owner position');
-  assert.ok(sim.verticalBounds(record).min > -.02, 'returned ground catches the body');
-  assert.equal(record.owner, null);
+  mouth.x += 7 * PHYSICS_STEP; sim.step([mouth]);
+  assert.ok(record.body.velocity.x > 6, 'the moving rim transfers its normal velocity');
+  assert.ok(record.pose.x > .08 && record.pose.x < .16, 'contact pushes, not a position snap');
+  assert.ok(Math.abs(record.body.angularVelocity.z) > .01, 'off-center contact produces torque');
+  assert.equal(record.done, false, 'contact is not an immediate score');
+});
+
+test('a receding wall does not pull a falling prop toward its moving hole', () => {
+  const sim = simulation('neonCrate', .4), record = sim.activate(0);
+  record.body.position.y -= .2; record.body.aabbNeedsUpdate = true;
+  sim.step([hole(0, .75)]);
+  const before = record.pose.x;
+  sim.step([hole(.12, .75)]);
+  assert.ok(record.pose.x <= before + .00001);
+  assert.ok(record.body.velocity.x <= .001);
+});
+
+test('a half-submerged compound car is not pinned between wheel and chassis contacts', () => {
+  for (const axis of ['x', 'z']) for (const direction of [-1, 1]) for (const speed of [4, 7, 30]) {
+    const { sim, record, mouth } = inserted('car', .65, 1.8, .4);
+    const completed = []; let previous = { ...record.pose }, maxStep = 0, maxTravel = 0;
+    for (let i = 0; i < 600; i++) {
+      mouth[axis] = direction * Math.min(3, (i + 1) * speed * PHYSICS_STEP);
+      completed.push(...sim.step([mouth]));
+      const pose = record.pose;
+      assert.ok([pose.x, pose.y, pose.z, ...pose.q, ...record.body.velocity.toArray()].every(Number.isFinite));
+      maxStep = Math.max(maxStep, Math.hypot(pose.x - previous.x, pose.y - previous.y, pose.z - previous.z));
+      previous = { ...pose };
+      maxTravel = Math.max(maxTravel, direction * pose[axis]);
+    }
+    assert.equal(completed.length, 1, `${axis}/${direction}/${speed}: cannot remain embedded`);
+    assert.ok(sim.verticalBounds(record).max < -GROUND_THICKNESS);
+    assert.ok(maxTravel > .15, 'contact initially pushes in the rim travel direction; tipping may reverse it later');
+    assert.ok(maxStep < speed * PHYSICS_STEP + .2, 'fast wall motion stays continuous');
+    assert.ok(Math.abs(sim.world.time - 601 * PHYSICS_STEP) < 1e-9, 'substeps preserve elapsed time');
+  }
+});
+
+test('a naturally falling car clears when the hole moves away midway through descent', () => {
+  const sim = simulation('car'), mouth = hole(0, 1.9);
+  run(sim, [mouth], 12);
+  const record = sim.records.get(0), initial = sim.verticalBounds(record);
+  assert.ok(initial.min < -GROUND_THICKNESS && initial.max > 0);
+  const completed = [];
+  for (let i = 0; i < 600; i++) {
+    mouth.x = Math.min(10.5, (i + 1) * 7 * PHYSICS_STEP);
+    completed.push(...sim.step([mouth]));
+  }
+  assert.deepEqual(completed, [{ id: 0, owner: 'host' }]);
+  assert.ok(sim.verticalBounds(record).max < -GROUND_THICKNESS);
+});
+
+test('removed or discontinuously relocated holes recover whole compounds without launching or scoring', () => {
+  for (const [type, depth, radius] of [['car', .65, 1.8], ['tree', 1.2, 1.5]]) for (const moved of [false, true]) {
+    const { sim, record } = inserted(type, depth, radius);
+    let previous = { ...record.pose }, maxStep = 0;
+    for (let i = 0; i < 600; i++) {
+      assert.deepEqual(sim.step(moved ? [hole(10, radius)] : []), []);
+      maxStep = Math.max(maxStep, Math.hypot(record.pose.x - previous.x, record.pose.y - previous.y, record.pose.z - previous.z));
+      previous = { ...record.pose };
+      const normals = sim.world.contacts.map(contact => contact.ni.y);
+      assert.ok(!(normals.includes(1) && normals.includes(-1)), 'parts cannot pin each other across the slab');
+    }
+    assert.ok(sim.verticalBounds(record).min > -.02, `${type}: restored terrain catches the whole body`);
+    assert.ok(maxStep < .05, 'position resets do not generate teleport impulses');
+    assert.equal(record.owner, null);
+  }
+});
+
+test('a tall compound can rest on the rim, then recover if its hole is removed', () => {
+  const { sim, record, mouth } = inserted('tree', 1.2, 1.5);
+  for (let i = 0; i < 600; i++) {
+    mouth.x = Math.min(3, (i + 1) * 7 * PHYSICS_STEP); sim.step([mouth]);
+  }
+  assert.ok(record.pose.x > .5, 'rim pushes a trunk, not only box-shaped props');
+  assert.equal(record.done, false, 'a canopy still above ground cannot score');
+  assert.ok(sim.verticalBounds(record).max > 0);
+  assert.deepEqual(run(sim, [], 600), []);
+  assert.ok(sim.verticalBounds(record).min > -.02, 'there is no permanent terrain embedding');
+});
+
+test('an overlapping stationary opening hides another moving rim without transferring its motion', () => {
+  const { sim, record, mouth } = inserted('neonCrate', .4, .65);
+  const cover = hole(0, 2, 'other');
+  for (let i = 0; i < 5; i++) {
+    mouth.x += 7 * PHYSICS_STEP;
+    // Reorder the players too: wall velocity is tracked by identity, not index.
+    sim.step(i % 2 ? [mouth, cover] : [cover, mouth]);
+    assert.equal(record.pose.x, 0);
+    assert.equal(record.pose.z, 0);
+    assert.deepEqual(record.pose.q, [0, 0, 0, 1]);
+    assert.equal(sim.world.contacts.length, 0);
+  }
+});
+
+test('independent moving holes impart opposite contact velocities and clear pooled velocity when stopped', () => {
+  const sim = new HolePhysics([-3, 3].map((x, id) => ({ ...ITEM_CATALOG.neonCrate, type: 'neonCrate', id, x, z: 0, rotation: 0 })));
+  const records = [0, 1].map(id => sim.activate(id));
+  for (const { body } of records) { body.position.y -= .4; body.aabbNeedsUpdate = true; }
+  const left = hole(-3, .65, 'left'), right = hole(3, .65, 'right');
+  sim.step([left, right]);
+  for (let i = 0; i < 3; i++) {
+    left.x -= 7 * PHYSICS_STEP; right.x += 7 * PHYSICS_STEP;
+    sim.step(i % 2 ? [left, right] : [right, left]);
+  }
+  assert.ok(records[0].body.velocity.x < -6);
+  assert.ok(records[1].body.velocity.x > 6);
+  assert.ok(sim.world.contacts.some(contact => contact.wallSpeed > 6));
+  sim.step([left, right]);
+  assert.ok(sim.world.contacts.every(contact => contact.wallSpeed === 0), 'stopped walls and reused support equations cannot retain motion');
+});
+
+test('fully cleared geometry is not towed or resurfaced by a moving or removed hole', () => {
+  for (const mouths of [[hole(.5, .65)], []]) {
+    const { sim, record } = inserted('neonCrate', .4, .65);
+    record.body.position.y -= 1; record.body.aabbNeedsUpdate = true;
+    const x = record.body.position.x, y = record.body.position.y;
+    assert.deepEqual(sim.step(mouths), [{ id: 0, owner: 'host' }]);
+    assert.equal(record.body.position.x, x);
+    assert.ok(record.body.position.y < y);
+    assert.equal(sim.world.contacts.length, 0);
+    assert.deepEqual(run(sim, mouths), []);
+  }
 });
 
 test('overlapping mouths have one authoritative score and cleared bodies stay removed', () => {

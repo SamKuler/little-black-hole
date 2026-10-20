@@ -1,4 +1,4 @@
-import { Vec3 } from 'cannon-es';
+import { ContactEquation, Vec3 } from 'cannon-es';
 import { getConvexHull } from './shapes.js';
 
 // A finite slab matters: once a prop clears its underside, a moving mouth
@@ -24,7 +24,7 @@ function intersections(a, b, hole) {
 // Public pure manifold builder so circular aperture, rim, and bridging behavior
 // are testable without a renderer. Contacts are on the actual convex proxy,
 // not at an object's center. Edge/circle intersections retain rim supports.
-export function groundContacts(vertices, edges, holes, faces = []) {
+export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
   const minY = Math.min(...vertices.map(point => point.y)), maxY = Math.max(...vertices.map(point => point.y));
   if (maxY < -GROUND_THICKNESS - SKIN || minY > SKIN) return [];
   const minX = Math.min(...vertices.map(point => point.x)), maxX = Math.max(...vertices.map(point => point.x));
@@ -35,7 +35,9 @@ export function groundContacts(vertices, edges, holes, faces = []) {
   // A circle and this projected hull are convex. If one mouth contains every
   // vertex, it contains the whole part; no rim manifold needs to be built.
   if (holes.some(hole => vertices.every(point => inOpening(point.x, point.z, [hole], SKIN)))) return [];
-  const submerged = maxY < -GROUND_THICKNESS / 2;
+  // A compound body must escape on one side of the slab. Classifying wheels,
+  // chassis and roof independently can pin them with opposing constraints.
+  const submerged = (bodyMaxY ?? maxY) < -GROUND_THICKNESS / 2;
   const candidates = vertices.map(point => ({ point, rim: false }));
   const supportEdges = new Set();
   for (const face of faces) {
@@ -85,7 +87,7 @@ export function groundContacts(vertices, edges, holes, faces = []) {
   const contacts = [], used = new Set();
   for (const { point: p, rim, side, boundary } of candidates) {
     if (p.y > SKIN || (!rim && !boundary && inOpening(p.x, p.z, holes))) continue;
-    let normal = new Vec3(0, 1, 0), depth = -p.y;
+    let normal = new Vec3(0, 1, 0), depth = -p.y, wall;
     // The slab's underside pushes downward rather than teleporting a nearly
     // swallowed object back above ground when its opening moves away.
     if (submerged) {
@@ -97,10 +99,10 @@ export function groundContacts(vertices, edges, holes, faces = []) {
     if (!rim && p.y >= -GROUND_THICKNESS) for (const hole of holes) {
       const dx = hole.x - p.x, dz = hole.z - p.z, distance = Math.hypot(dx, dz);
       const radialDepth = distance - hole.radius;
-      if (radialDepth >= -SKIN && radialDepth < depth && distance > 1e-9) {
+      if (radialDepth >= -SKIN && radialDepth < (side && !wall ? GROUND_THICKNESS : depth) && distance > 1e-9) {
         const qx = hole.x - dx / distance * hole.radius, qz = hole.z - dz / distance * hole.radius;
         if (!inOpening(qx, qz, holes.filter(other => other !== hole), SKIN)) {
-          normal = new Vec3(dx / distance, 0, dz / distance); depth = Math.max(0, radialDepth);
+          normal = new Vec3(dx / distance, 0, dz / distance); depth = Math.max(0, radialDepth); wall = hole;
         }
       }
     }
@@ -110,9 +112,22 @@ export function groundContacts(vertices, edges, holes, faces = []) {
     const key = `${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)},${normal.y}`;
     if (used.has(key)) continue;
     used.add(key);
-    contacts.push({ point: p, normal, depth: Math.max(0, depth) });
+    contacts.push({ point: p, normal, depth: Math.max(0, depth), wall });
   }
-  return contacts;
+  // A bottom already below the slab is not a shelf. When a real wall contact
+  // can resolve the overlap, let that clipped cross-section push/turn the
+  // shape instead of simultaneously lifting its buried bottom. If a hole
+  // disappears or jumps away, retain one-sided recovery to escape restored
+  // solid terrain rather than leaving the compound body embedded forever.
+  return contacts.some(contact => contact.wall)
+    ? contacts.filter(contact => contact.normal.y !== 1 || contact.point.y >= -GROUND_THICKNESS)
+    : contacts;
+}
+
+function movingContactB(dt) {
+  // The perforated plane itself is static. Only an exposed circle wall has
+  // boundary velocity; translating the shared plane would drag every prop.
+  return ContactEquation.prototype.computeB.call(this, dt) + this.b * this.wallSpeed;
 }
 
 export function installPerforatedGround(world, getHoles) {
@@ -123,15 +138,18 @@ export function installPerforatedGround(world, getHoles) {
   narrowphase.planeConvex = function (planeShape, convexShape, planePosition, convexPosition, planeQuat, convexQuat, planeBody, convexBody, si, sj, justTest) {
     const hull = getConvexHull(convexShape);
     const vertices = hull.vertices.map(vertex => convexQuat.vmult(vertex).vadd(convexPosition));
-    const contacts = groundContacts(vertices, hull.edges, getHoles(), hull.faces);
+    const contacts = groundContacts(vertices, hull.edges, getHoles(), hull.faces, convexBody.aabb.upperBound.y);
     if (justTest) return contacts.length ? true : undefined;
-    for (const { point, normal, depth } of contacts) {
+    for (const { point, normal, depth, wall } of contacts) {
       const contact = this.createContactEquation(planeBody, convexBody, planeShape, convexShape, si, sj);
       contact.ni.copy(normal);
+      contact.computeB = movingContactB;
+      // Reset even on static contacts: cannon reuses equations from a pool.
+      contact.wallSpeed = wall ? (wall.vx ?? 0) * normal.x + (wall.vz ?? 0) * normal.z - (wall.vr ?? 0) : 0;
       // Limit positional error correction when a moving aperture restores
       // support through a partly inserted body. Resolve over several fixed
       // steps instead of converting a deep overlap into an explosive launch.
-      point.vadd(normal.scale(Math.min(depth, .035)), contact.ri); contact.ri.vsub(planeBody.position, contact.ri);
+      point.vadd(normal.scale(Math.min(depth, 2.1 * this.world.dt)), contact.ri); contact.ri.vsub(planeBody.position, contact.ri);
       point.vsub(convexBody.position, contact.rj);
       this.result.push(contact);
       const first = this.frictionResult.length;
