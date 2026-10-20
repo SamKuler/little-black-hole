@@ -58,3 +58,34 @@ test('each visual owns and releases its well and ring resources', () => {
   assert.equal(geometries, 4); assert.equal(materials, 4);
   disposeHoleVisual(second);
 });
+
+test('both recessed surfaces require a camera ray through a mouth, without masking the rim or floor as ground', () => {
+  const visual = createHoleVisual(), mask = new ApertureMask();
+  setHoleApertureMask(visual, mask);
+  const programs = new Set();
+  for (const name of ['well', 'floor']) {
+    const material = visual.getObjectByName(name).material;
+    const shader = { ...THREE.ShaderLib.basic, uniforms: {} };
+    material.onBeforeCompile(shader);
+    assert.match(shader.vertexShader, /vHoleWorldPosition = \(modelMatrix \* holeWorldPosition\).xyz;/);
+    assert.match(shader.fragmentShader, /vec3 holeViewRay = isOrthographic\s+\? vec3\(viewMatrix\[0\]\[2\], viewMatrix\[1\]\[2\], viewMatrix\[2\]\[2\]\)\s+: cameraPosition - vHoleWorldPosition;/);
+    assert.match(shader.fragmentShader, /if \(holeViewRay.y <= 0.0\) discard;/);
+    assert.match(shader.fragmentShader, /vec2 holeEntryXZ = vHoleWorldPosition.xz\s+- holeViewRay.xz \* \(vHoleWorldPosition.y \/ holeViewRay.y\);/);
+    assert.match(shader.fragmentShader, /if \(dot\(entryDelta, entryDelta\) < holeCircle.z \* holeCircle.z\) throughMouth = true;/);
+    assert.match(shader.fragmentShader, /if \(!throughMouth\) discard;/);
+    if (name === 'floor') assert.doesNotMatch(shader.fragmentShader, /vec2 holeDelta/);
+    programs.add(material.customProgramCacheKey());
+    const nextMask = new ApertureMask(), version = material.version;
+    setHoleApertureMask(visual, nextMask);
+    assert.equal(material.version, version, 'rebinding a map does not rebuild interior programs');
+    assert.equal(shader.uniforms.holeCircles, nextMask.uniforms.holeCircles);
+    nextMask.setHoles([{ x: 2, z: 3, radius: 4 }]);
+    assert.equal(shader.uniforms.holeCount.value, 1);
+    assert.deepEqual(shader.uniforms.holeCircles.value[0].toArray(), [2, 3, 4]);
+  }
+  assert.equal(programs.size, 2, 'floor visibility and well overlap removal need distinct programs');
+  for (const name of ['ring', 'outerRing']) {
+    assert.equal(visual.getObjectByName(name).material.onBeforeCompile, THREE.Material.prototype.onBeforeCompile);
+  }
+  disposeHoleVisual(visual);
+});

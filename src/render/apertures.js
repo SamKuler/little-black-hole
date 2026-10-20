@@ -27,14 +27,16 @@ export class ApertureMask {
     }
   }
 
-  apply(material, { well = false } = {}) {
+  apply(material, { well = false, interior = false } = {}) {
+    interior ||= well;
+    const kind = well ? 'well' : interior ? 'interior' : 'ground';
     let binding = bindings.get(material);
-    const changedProgram = !binding || binding.well !== well;
+    const changedProgram = !binding || binding.kind !== kind;
     if (!binding) {
       binding = { compiledUniforms: new Set() };
       bindings.set(material, binding);
     }
-    binding.mask = this; binding.well = well;
+    binding.mask = this; binding.kind = kind;
     // Three can reuse a material's program without calling onBeforeCompile,
     // even after needsUpdate. Rebind already-compiled uniforms on map changes.
     for (const uniforms of binding.compiledUniforms) Object.assign(uniforms, this.uniforms);
@@ -42,7 +44,8 @@ export class ApertureMask {
       Object.assign(shader.uniforms, binding.mask.uniforms);
       binding.compiledUniforms.add(shader.uniforms);
       const originVarying = well ? 'varying vec3 vHoleOriginAndRadius;' : '';
-      shader.vertexShader = `varying vec2 vHoleWorldXZ;\n${originVarying}\n${shader.vertexShader}`;
+      const interiorVarying = interior ? 'varying vec3 vHoleWorldPosition;' : '';
+      shader.vertexShader = `varying vec2 vHoleWorldXZ;\n${originVarying}\n${interiorVarying}\n${shader.vertexShader}`;
       shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
         #include <project_vertex>
         vec4 holeWorldPosition = vec4(transformed, 1.0);
@@ -53,6 +56,7 @@ export class ApertureMask {
           holeWorldPosition = instanceMatrix * holeWorldPosition;
         #endif
         vHoleWorldXZ = (modelMatrix * holeWorldPosition).xz;
+        ${interior ? 'vHoleWorldPosition = (modelMatrix * holeWorldPosition).xyz;' : ''}
         ${well ? 'vHoleOriginAndRadius = vec3(modelMatrix[3].xz, length(modelMatrix[0].xyz));' : ''}
       `);
       shader.fragmentShader = `
@@ -60,10 +64,31 @@ export class ApertureMask {
         uniform vec3 holeCircles[${MAX_HOLES}];
         varying vec2 vHoleWorldXZ;
         ${originVarying}
+        ${interiorVarying}
         ${shader.fragmentShader}
       `;
       shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
         #include <clipping_planes_fragment>
+        ${interior ? `
+          // A recessed shaft is visible only through a ground-level mouth.
+          // Finite map sides cannot otherwise hide its lower walls and floor.
+          // Orthographic rays are parallel, not cameraPosition - fragment.
+          vec3 holeViewRay = isOrthographic
+            ? vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2])
+            : cameraPosition - vHoleWorldPosition;
+          if (holeViewRay.y <= 0.0) discard;
+          vec2 holeEntryXZ = vHoleWorldPosition.xz
+            - holeViewRay.xz * (vHoleWorldPosition.y / holeViewRay.y);
+          bool throughMouth = false;
+          for (int holeIndex = 0; holeIndex < ${MAX_HOLES}; holeIndex++) {
+            if (holeIndex >= holeCount) break;
+            vec3 holeCircle = holeCircles[holeIndex];
+            vec2 entryDelta = holeEntryXZ - holeCircle.xy;
+            if (dot(entryDelta, entryDelta) < holeCircle.z * holeCircle.z) throughMouth = true;
+          }
+          if (!throughMouth) discard;
+        ` : ''}
+        ${!interior || well ? `
         for (int holeIndex = 0; holeIndex < ${MAX_HOLES}; holeIndex++) {
           if (holeIndex >= holeCount) break;
           vec3 holeCircle = holeCircles[holeIndex];
@@ -75,9 +100,10 @@ export class ApertureMask {
           vec2 holeDelta = vHoleWorldXZ - holeCircle.xy;
           if (dot(holeDelta, holeDelta) < holeCircle.z * holeCircle.z) discard;
         }
+        ` : ''}
       `);
     };
-    material.customProgramCacheKey = () => `circular-apertures-v1-${MAX_HOLES}-${well ? 'well' : 'ground'}`;
+    material.customProgramCacheKey = () => `circular-apertures-v2-${MAX_HOLES}-${kind}`;
     if (changedProgram) material.needsUpdate = true;
     return material;
   }

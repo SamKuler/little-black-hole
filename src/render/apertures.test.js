@@ -40,6 +40,7 @@ for (const [name, Material] of [['standard', THREE.MeshStandardMaterial], ['dept
     assert.match(shader.fragmentShader, /uniform vec3 holeCircles\[4\];/);
     assert.match(shader.fragmentShader, /for \(int holeIndex = 0; holeIndex < 4; holeIndex\+\+\)/);
     assert.match(shader.fragmentShader, /if \(dot\(holeDelta, holeDelta\) < holeCircle.z \* holeCircle.z\) discard;/);
+    assert.doesNotMatch(shader.fragmentShader, /holeViewRay|throughMouth/, 'ground and shadow masks keep their existing world-space clipping');
     assert.equal(shader.uniforms.holeCount, mask.uniforms.holeCount);
     assert.equal(shader.uniforms.holeCircles, mask.uniforms.holeCircles);
     const programKey = material.customProgramCacheKey(), version = material.version;

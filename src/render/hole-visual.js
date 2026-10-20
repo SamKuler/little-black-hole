@@ -31,6 +31,7 @@ export function createHoleVisual(color = '#a68add') {
 // each visual owns its geometry/materials, so create rather than clone visuals.
 export function setHoleApertureMask(visual, apertures) {
   apertures.apply(visual.getObjectByName('well').material, { well: true });
+  apertures.apply(visual.getObjectByName('floor').material, { interior: true });
 }
 
 export function disposeHoleVisual(visual) {
