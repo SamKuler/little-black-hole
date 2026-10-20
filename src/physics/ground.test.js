@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Box, Vec3 } from 'cannon-es';
+import { Box, Quaternion, Vec3 } from 'cannon-es';
 import { GROUND_THICKNESS, groundContacts, inOpening } from './ground.js';
 import { getConvexHull } from './shapes.js';
+import { sectionInOpenings } from './aperture.js';
 
 function box(halfExtents, position) {
   const hull = getConvexHull(new Box(new Vec3(...halfExtents)));
@@ -91,6 +92,23 @@ test('four openings around a footprint leave support on a solid island inside a 
   assert.ok(contacts.some(contact => contact.normal.y === 1 && !inOpening(contact.point.x, contact.point.z, holes)));
 });
 
+test('exact exposed circle intersections preserve a tiny off-center solid island between angular samples', () => {
+  const { vertices, edges, faces } = box([.1, .1, .1], [.035, .1, 0]);
+  const holes = Array.from({ length: 3 }, (_, i) => {
+    const angle = .1 + i * Math.PI * 2 / 3;
+    return { x: Math.cos(angle), z: Math.sin(angle), radius: .98 };
+  });
+  assert.equal(inOpening(0, 0, holes), false, 'a small central patch of solid terrain remains');
+  assert.equal(inOpening(.035, 0, holes), true, 'the face center misses the solid patch');
+  assert.ok(vertices.every(point => inOpening(point.x, point.z, holes)));
+  assert.equal(sectionInOpenings(vertices, holes, .004), false);
+  const contacts = groundContacts(vertices, edges, holes, faces);
+  assert.ok(contacts.filter(contact => contact.normal.y === 1).length >= 3, 'exact island vertices supply a real support polygon');
+  assert.ok(contacts.every(contact => Math.abs(contact.point.y) < 1e-9));
+  const covered = holes.map(hole => ({ ...hole, radius: 1.02 }));
+  assert.deepEqual(groundContacts(vertices, edges, covered, faces), [], 'covered internal intersections cannot create phantom support');
+});
+
 test('compound parts use the whole body side rather than opposing top and underside normals', () => {
   const { vertices, edges, faces } = box([.2, .2, .2], [0, -.35, 0]);
   const isolated = groundContacts(vertices, edges, [], faces);
@@ -110,4 +128,37 @@ test('slab-clipped wall samples take priority over buried bottom supports', () =
   assert.ok(walls.every(contact => contact.point.y >= -GROUND_THICKNESS && contact.point.y <= .004));
   assert.ok(walls.every(contact => contact.wall === mouth));
   assert.ok(contacts.every(contact => contact.normal.y !== 1 || contact.point.y >= -GROUND_THICKNESS));
+});
+
+test('a tilted buried base cannot support a clear finite-slab section in one or two mouths', () => {
+  const hull = getConvexHull(new Box(new Vec3(.5, 3, .5)));
+  const rotation = new Quaternion(); rotation.setFromAxisAngle(new Vec3(0, 0, 1), .2);
+  const vertices = hull.vertices.map(vertex => rotation.vmult(vertex).vadd(new Vec3(0, -1, 0)));
+  const single = [{ x: 0, z: 0, radius: 1 }];
+  const union = [-.35, .35].map(x => ({ x, z: 0, radius: .75 }));
+  // The buried lower corners lie outside both openings, but all material
+  // crossing the slab fits inside their union with several centimetres spare.
+  assert.ok(vertices.some(point => point.y < -3 && !inOpening(point.x, point.z, union)));
+  for (const holes of [single, union]) assert.deepEqual(groundContacts(vertices, hull.edges, holes, hull.faces), []);
+  for (const holes of [[], [{ x: 10, z: 0, radius: 1 }]]) {
+    const restored = groundContacts(vertices, hull.edges, holes, hull.faces);
+    assert.ok(restored.length > 0, 'removed or relocated openings still restore solid terrain');
+    assert.ok(restored.every(contact => contact.normal.y === 1));
+  }
+});
+
+test('a horizontal lower-edge intersection below the top lip is a wall, not a shelf', () => {
+  const vertices = [new Vec3(.9, -.1, 0), new Vec3(1.1, -.1, 0)];
+  const contacts = groundContacts(vertices, [[0, 1]], [{ x: 0, z: 0, radius: 1 }]);
+  const boundary = contacts.find(contact => Math.abs(contact.point.x - 1) < 1e-9);
+  assert.ok(boundary);
+  assert.equal(boundary.normal.y, 0);
+  assert.equal(boundary.normal.x, -1);
+});
+
+test('a submerged prop retains downward underside recovery near an opening', () => {
+  const { vertices, edges, faces } = box([.2, .1, .2], [.95, -.3, 0]);
+  const contacts = groundContacts(vertices, edges, [{ x: 0, z: 0, radius: 1 }], faces);
+  assert.ok(contacts.some(contact => contact.normal.y === -1));
+  assert.ok(contacts.every(contact => contact.normal.y !== 1));
 });

@@ -4,6 +4,7 @@ import { LEVELS, levelForRadius } from './rules.js';
 import { createMap, MAPS, DEFAULT_MAP } from './maps/index.js';
 import { MapScene } from './render/map-scene.js';
 import { interpolatePose, interpolateHole } from './fall.js';
+import { snapshotFraction } from './render/interpolation.js';
 import { createHoleVisual, setHoleApertureMask, disposeHoleVisual } from './render/hole-visual.js';
 import { availableItemNames } from './items/catalog.js';
 import { Match, ROUND_SECONDS, modeName, standings } from './match.js';
@@ -387,7 +388,7 @@ function frame(now) {
   const player = me(); if (!player) return;
   // Bodies and apertures share one interpolation clock. A client cannot
   // open ground ahead of a body, pull a prop with prediction, or award food.
-  const fraction = view.phase === 'playing' ? Math.min(1, (now - snapshotAt) / 1000 / snapshotInterval) : 1;
+  const fraction = snapshotFraction(view.phase, (now - snapshotAt) / 1000, snapshotInterval);
   const position = interpolateHole(previousPlayers.get(player.id), player, fraction);
   hole.position.set(position.x, 0, position.z);
   hole.scale.set(position.radius, 1, position.radius); ring.material.color.set(player.color);

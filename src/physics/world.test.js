@@ -125,30 +125,35 @@ test('a naturally falling car clears when the hole moves away midway through des
 test('removed or discontinuously relocated holes recover whole compounds without launching or scoring', () => {
   for (const [type, depth, radius] of [['car', .65, 1.8], ['tree', 1.2, 1.5]]) for (const moved of [false, true]) {
     const { sim, record } = inserted(type, depth, radius);
-    let previous = { ...record.pose }, maxStep = 0;
+    let previous = { ...record.pose }, maxStep = 0, recoveryStep = 0;
     for (let i = 0; i < 600; i++) {
       assert.deepEqual(sim.step(moved ? [hole(10, radius)] : []), []);
-      maxStep = Math.max(maxStep, Math.hypot(record.pose.x - previous.x, record.pose.y - previous.y, record.pose.z - previous.z));
+      const displacement = Math.hypot(record.pose.x - previous.x, record.pose.y - previous.y, record.pose.z - previous.z);
+      maxStep = Math.max(maxStep, displacement);
+      if (i < 30) recoveryStep = Math.max(recoveryStep, displacement);
       previous = { ...record.pose };
       const normals = sim.world.contacts.map(contact => contact.ni.y);
       assert.ok(!(normals.includes(1) && normals.includes(-1)), 'parts cannot pin each other across the slab');
     }
     assert.ok(sim.verticalBounds(record).min > -.02, `${type}: restored terrain catches the whole body`);
-    assert.ok(maxStep < .05, 'position resets do not generate teleport impulses');
+    assert.ok(recoveryStep < .05, 'position resets do not generate teleport impulses');
+    assert.ok(maxStep < .2, 'later toppling stays continuous without artificial static friction');
     assert.equal(record.owner, null);
   }
 });
 
-test('a tall compound can rest on the rim, then recover if its hole is removed', () => {
+test('a laterally pushed tree does not remain hooked by an unloaded wall', () => {
   const { sim, record, mouth } = inserted('tree', 1.2, 1.5);
-  for (let i = 0; i < 600; i++) {
-    mouth.x = Math.min(3, (i + 1) * 7 * PHYSICS_STEP); sim.step([mouth]);
+  const completed = []; let pushed = false;
+  for (let i = 0; i < 1800; i++) {
+    mouth.x = Math.min(3, (i + 1) * 7 * PHYSICS_STEP);
+    completed.push(...sim.step([mouth]));
+    pushed ||= record.pose.x > .5;
+    if (!record.done) continue;
+    assert.ok(sim.verticalBounds(record).max < -GROUND_THICKNESS, 'canopy must actually clear before scoring');
   }
-  assert.ok(record.pose.x > .5, 'rim pushes a trunk, not only box-shaped props');
-  assert.equal(record.done, false, 'a canopy still above ground cannot score');
-  assert.ok(sim.verticalBounds(record).max > 0);
-  assert.deepEqual(run(sim, [], 600), []);
-  assert.ok(sim.verticalBounds(record).min > -.02, 'there is no permanent terrain embedding');
+  assert.ok(pushed, 'rim pushes a trunk, not only box-shaped props');
+  assert.deepEqual(completed, [{ id: 0, owner: 'host' }]);
 });
 
 test('an overlapping stationary opening hides another moving rim without transferring its motion', () => {

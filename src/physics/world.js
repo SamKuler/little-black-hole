@@ -1,6 +1,7 @@
 import { Body, Broadphase, Plane, Vec3, World } from 'cannon-es';
 import { createItemBody } from './shapes.js';
 import { GROUND_THICKNESS, installPerforatedGround, inOpening } from './ground.js';
+import { GroundSolver } from './solver.js';
 
 export const PHYSICS_STEP = 1 / 60;
 export const MAX_CATCHUP = .5;
@@ -33,6 +34,7 @@ export class HolePhysics {
     this.turn = 0;
     this.world = new World({ gravity: new Vec3(0, -22, 0), allowSleep: true });
     this.world.broadphase = new GroundBroadphase();
+    this.world.solver = new GroundSolver();
     this.world.solver.iterations = 18;
     this.world.solver.tolerance = 1e-7;
     Object.assign(this.world.defaultContactMaterial, {
@@ -105,7 +107,7 @@ export class HolePhysics {
       // full-model envelope, so a simplified collider cannot score too early.
       const item = this.items[record.id], q = body.quaternion;
       const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
-      const visibleTop = record.pose.y + Math.max(0, item.height * upY) + item.radius * Math.sqrt(Math.max(0, 1 - upY * upY));
+      const visibleTop = record.pose.y + Math.max((item.minY ?? 0) * upY, item.height * upY) + item.radius * Math.sqrt(Math.max(0, 1 - upY * upY));
       if (record.owner && Math.max(bounds.max, visibleTop) < -GROUND_THICKNESS - .06) {
         record.done = true;
         record.completedAt = this.world.time;

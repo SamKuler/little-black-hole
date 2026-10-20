@@ -1,5 +1,7 @@
 import { ContactEquation, Vec3 } from 'cannon-es';
 import { getConvexHull } from './shapes.js';
+import { coupleContactFriction } from './solver.js';
+import { exposedOpeningIntersections, sectionInOpenings } from './aperture.js';
 
 // A finite slab matters: once a prop clears its underside, a moving mouth
 // cannot tow it around underground. The decorative terrain layers are flat.
@@ -35,11 +37,31 @@ export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
   // A circle and this projected hull are convex. If one mouth contains every
   // vertex, it contains the whole part; no rim manifold needs to be built.
   if (holes.some(hole => vertices.every(point => inOpening(point.x, point.z, [hole], SKIN)))) return [];
+  // Only the portion intersecting the finite slab can collide with terrain.
+  // A tilted tower's buried base can project outside the circle while its
+  // entire ground-level cross-section fits. Using the original bottom there
+  // creates a phantom shelf several metres underneath an empty opening.
+  if (holes.length && minY < -GROUND_THICKNESS) {
+    const lower = -GROUND_THICKNESS - SKIN, upper = SKIN;
+    const section = vertices.filter(point => point.y >= lower && point.y <= upper);
+    for (const [i, j] of edges) {
+      const a = vertices[i], b = vertices[j], dy = b.y - a.y;
+      if (Math.abs(dy) < 1e-9) continue;
+      for (const y of [lower, upper]) {
+        const t = (y - a.y) / dy;
+        if (t > 0 && t < 1) section.push(new Vec3(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
+      }
+    }
+    // The union test checks complete edges and possible enclosed solid
+    // islands, not merely whether each vertex falls in some opening.
+    if (sectionInOpenings(section, holes, SKIN)) return [];
+  }
   // A compound body must escape on one side of the slab. Classifying wheels,
   // chassis and roof independently can pin them with opposing constraints.
   const submerged = (bodyMaxY ?? maxY) < -GROUND_THICKNESS / 2;
   const candidates = vertices.map(point => ({ point, rim: false }));
   const supportEdges = new Set();
+  const exposedIntersections = holes.length > 1 ? exposedOpeningIntersections(holes) : [];
   for (const face of faces) {
     const a = vertices[face[0]], b = vertices[face[1]], c = vertices[face[2]];
     const normal = b.vsub(a).cross(c.vsub(a)); normal.normalize();
@@ -55,19 +77,24 @@ export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
     // Exposed rim points inside a large face preserve support even when the
     // union of several mouths covers every corner and perimeter edge.
     // With one convex circle, corners and edge intersections already bound
-    // the supported portion. Interior sampling is only needed for the
-    // non-convex union of multiple mouths.
-    if (holes.length > 1) for (const hole of holes) for (let i = 0; i < 24; i++) {
-      const angle = i * Math.PI / 12;
-      const x = hole.x + Math.cos(angle) * hole.radius, z = hole.z + Math.sin(angle) * hole.radius;
-      const y = a.y - (normal.x * (x - a.x) + normal.z * (z - a.z)) / normal.y;
-      if (y > SKIN || inOpening(x, z, holes, SKIN)) continue;
-      const point = new Vec3(x, y, z);
-      const inside = face.every((id, index) => {
-        const start = vertices[id], end = vertices[face[(index + 1) % face.length]];
-        return end.vsub(start).cross(point.vsub(start)).dot(normal) >= -1e-7;
-      });
-      if (inside) candidates.push({ point, rim: true });
+    // the supported portion. Exact exposed circle-circle vertices preserve
+    // tiny solid islands that neither face centers nor angular samples hit.
+    if (holes.length > 1) {
+      const addRimPoint = (x, z) => {
+        const y = a.y - (normal.x * (x - a.x) + normal.z * (z - a.z)) / normal.y;
+        if (y > SKIN || inOpening(x, z, holes, SKIN)) return;
+        const point = new Vec3(x, y, z);
+        const inside = face.every((id, index) => {
+          const start = vertices[id], end = vertices[face[(index + 1) % face.length]];
+          return end.vsub(start).cross(point.vsub(start)).dot(normal) >= -1e-7;
+        });
+        if (inside) candidates.push({ point, rim: true });
+      };
+      for (const point of exposedIntersections) addRimPoint(point.x, point.z);
+      for (const hole of holes) for (let i = 0; i < 24; i++) {
+        const angle = i * Math.PI / 12;
+        addRimPoint(hole.x + Math.cos(angle) * hole.radius, hole.z + Math.sin(angle) * hole.radius);
+      }
     }
   }
   for (const [i, j] of edges) {
@@ -94,12 +121,14 @@ export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
       if (p.y < -GROUND_THICKNESS) continue;
       normal.y = -1; depth = p.y + GROUND_THICKNESS;
     }
-    // Side samples contact the nearest exposed circular wall. Bottom-edge
-    // boundary samples keep the upward support normal needed for tipping.
-    if (!rim && p.y >= -GROUND_THICKNESS) for (const hole of holes) {
+    // At the top lip a lower edge can support weight. Below the lip, the
+    // same circle intersection is a vertical wall, not an upward shelf.
+    const lip = rim && p.y >= -SKIN;
+    const wallOnly = side || (rim && !lip);
+    if (!lip && p.y >= -GROUND_THICKNESS) for (const hole of holes) {
       const dx = hole.x - p.x, dz = hole.z - p.z, distance = Math.hypot(dx, dz);
       const radialDepth = distance - hole.radius;
-      if (radialDepth >= -SKIN && radialDepth < (side && !wall ? GROUND_THICKNESS : depth) && distance > 1e-9) {
+      if (radialDepth >= -SKIN && radialDepth < (wallOnly && !wall ? GROUND_THICKNESS : depth) && distance > 1e-9) {
         const qx = hole.x - dx / distance * hole.radius, qz = hole.z - dz / distance * hole.radius;
         if (!inOpening(qx, qz, holes.filter(other => other !== hole), SKIN)) {
           normal = new Vec3(dx / distance, 0, dz / distance); depth = Math.max(0, radialDepth); wall = hole;
@@ -108,7 +137,7 @@ export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
     }
     // An intersection on a vertical hull edge is a wall sample, not an
     // artificial shelf halfway up a prop. Top/bottom faces provide support.
-    if (side && normal.y !== 0) continue;
+    if (wallOnly && normal.y !== 0) continue;
     const key = `${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)},${normal.y}`;
     if (used.has(key)) continue;
     used.add(key);
@@ -125,9 +154,13 @@ export function groundContacts(vertices, edges, holes, faces = [], bodyMaxY) {
 }
 
 function movingContactB(dt) {
+  this.contactImpulse = 0;
+  this.positionBias = this.a * Math.max(0, this.penetration - .001);
   // The perforated plane itself is static. Only an exposed circle wall has
   // boundary velocity; translating the shared plane would drag every prop.
-  return ContactEquation.prototype.computeB.call(this, dt) + this.b * this.wallSpeed;
+  // Penetration correction is solved separately, without manufacturing a
+  // physical normal load that friction could use to lock an overlap in place.
+  return ContactEquation.prototype.computeB.call(this, dt) - this.a * this.penetration + this.b * this.wallSpeed;
 }
 
 export function installPerforatedGround(world, getHoles) {
@@ -149,15 +182,16 @@ export function installPerforatedGround(world, getHoles) {
       // Limit positional error correction when a moving aperture restores
       // support through a partly inserted body. Resolve over several fixed
       // steps instead of converting a deep overlap into an explosive launch.
-      point.vadd(normal.scale(Math.min(depth, 2.1 * this.world.dt)), contact.ri); contact.ri.vsub(planeBody.position, contact.ri);
+      contact.penetration = Math.min(depth, 2.1 * this.world.dt);
+      point.vadd(normal.scale(contact.penetration), contact.ri); contact.ri.vsub(planeBody.position, contact.ri);
       point.vsub(convexBody.position, contact.rj);
       this.result.push(contact);
       const first = this.frictionResult.length;
       this.createFrictionEquationsFromContact(contact, this.frictionResult);
-      for (let i = first; i < this.frictionResult.length; i++) {
-        this.frictionResult[i].minForce /= contacts.length;
-        this.frictionResult[i].maxForce /= contacts.length;
-      }
+      const matA = contact.si.material || planeBody.material, matB = contact.sj.material || convexBody.material;
+      const coefficient = matA && matB && matA.friction >= 0 && matB.friction >= 0
+        ? matA.friction * matB.friction : this.currentContactMaterial.friction;
+      coupleContactFriction(contact, this.frictionResult.slice(first), coefficient);
     }
   };
 }

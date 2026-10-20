@@ -1,10 +1,12 @@
 import { fitsHole } from '../rules.js';
 
 // Dimensions describe the rigid model in world units; radius is its ground footprint.
+// The visible vertical envelope is [minY ?? 0, height], including authored
+// below-ground trim so inverted models cannot score before they fully clear.
 export const ITEM_CATALOG = {
-  stone: { name: '石子', model: 'stone', radius: .4, mass: 2, height: .6, color: '#ccd1c2' },
+  stone: { name: '石子', model: 'stone', radius: .4, mass: 2, height: .6, minY: -.07, color: '#ccd1c2' },
   cone: { name: '路锥', model: 'cone', radius: .4, mass: 2, height: .9, color: '#e99c64' },
-  bush: { name: '灌木', model: 'bush', radius: .4, mass: 2, height: 1.13, color: '#6fa185' },
+  bush: { name: '灌木', model: 'bush', radius: .4, mass: 2, height: 1.13, minY: -.08, color: '#6fa185' },
   tree: { name: '树木', model: 'tree', radius: 1.2, mass: 9, height: 3.8, color: '#78a989' },
   pine: { name: '松树', model: 'pine', radius: 1.15, mass: 9, height: 3.6, color: '#6e9d89' },
   bench: { name: '长椅', model: 'bench', radius: 1, mass: 6, height: 1.3, color: '#c39b75' },
