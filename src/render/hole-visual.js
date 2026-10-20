@@ -6,12 +6,14 @@ export function createHoleVisual(color = '#a68add') {
   const visual = new THREE.Group();
   const well = new THREE.Mesh(
     new THREE.CylinderGeometry(1, 1, 8, 96, 1, true),
-    new THREE.MeshBasicMaterial({ color: '#171520', side: THREE.BackSide, fog: false }),
+    new THREE.MeshBasicMaterial({ color: '#171520', side: THREE.BackSide, fog: false, toneMapped: false }),
   );
   well.name = 'well'; well.position.y = -4; visual.add(well);
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(1, 96),
-    new THREE.MeshBasicMaterial({ color: '#0d0c13', fog: false }),
+    // An unlit black backdrop, not a contrasting visible floor. The wall has
+    // already reached the same black well before this depth.
+    new THREE.MeshBasicMaterial({ color: '#000000', fog: false, toneMapped: false }),
   );
   floor.name = 'floor'; floor.rotation.x = -Math.PI / 2; floor.position.y = -8; visual.add(floor);
   const ring = new THREE.Mesh(

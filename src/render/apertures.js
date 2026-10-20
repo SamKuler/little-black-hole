@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fadeAbyssFragment } from './abyss.js';
 
 export const MAX_HOLES = 4;
 const bindings = new WeakMap();
@@ -102,8 +103,9 @@ export class ApertureMask {
         }
         ` : ''}
       `);
+      if (well) fadeAbyssFragment(shader, 'vHoleWorldPosition.y');
     };
-    material.customProgramCacheKey = () => `circular-apertures-v2-${MAX_HOLES}-${kind}`;
+    material.customProgramCacheKey = () => `circular-apertures-v3-${MAX_HOLES}-${kind}`;
     if (changedProgram) material.needsUpdate = true;
     return material;
   }

@@ -90,7 +90,7 @@ test('entrance projection follows camera orientation, not screen size or orthogr
   }
 });
 
-test('a grown mouth keeps its recessed floor visible through the opening', () => {
+test('a grown mouth retains its recessed backdrop behind the opening', () => {
   const visual = createHoleVisual(), hole = { x: 20, z: 15, radius: 12 };
   visual.position.set(hole.x, 0, hole.z); visual.scale.set(hole.radius, 1, hole.radius); visual.updateMatrixWorld(true);
   const camera = aim(new THREE.OrthographicCamera(-50, 50, 40, -40, .1, 180),

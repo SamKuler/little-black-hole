@@ -74,7 +74,10 @@ test('every ground layer shares moving apertures while full items have no horizo
     assert.equal(mesh.material.clippingPlanes, null, 'below-ground item fragments must survive through the opening');
     assert.equal(mesh.material.depthWrite, true);
     if (mesh.isInstancedMesh) {
-      assert.equal(mesh.material.onBeforeCompile, THREE.Material.prototype.onBeforeCompile);
+      const shader = { ...THREE.ShaderLib.standard, uniforms: {} };
+      mesh.material.onBeforeCompile(shader);
+      assert.match(shader.fragmentShader, /gl_FragColor.rgb \*= abyssLight;/);
+      assert.doesNotMatch(shader.fragmentShader, /holeCircles|throughMouth/, 'items darken without a horizontal clipping cap');
     } else {
       const shader = { ...THREE.ShaderLib.standard, uniforms: {} };
       mesh.material.onBeforeCompile(shader); shaders.push(shader);

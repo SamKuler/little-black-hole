@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createModel } from '../items/models.js';
 import { ApertureMask } from './apertures.js';
+import { applyAbyssFade } from './abyss.js';
 
 function mergeByMaterial(root) {
   root.updateMatrixWorld(true);
@@ -32,7 +33,8 @@ export class MapScene {
       const key = `${color}:${item}:${emission}`;
       if (!this.materials.has(key)) {
         const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: emission, roughness: .85 });
-        if (!item) this.apertures.apply(material);
+        if (item) applyAbyssFade(material);
+        else this.apertures.apply(material);
         this.materials.set(key, material);
       }
       return this.materials.get(key);
